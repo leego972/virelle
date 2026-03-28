@@ -30,9 +30,9 @@
   "submit": {
     "production": {
       "ios": {
-        "ascApiKeyId": "2WG5YUFL55",
-        "ascApiKeyIssuerId": "$APPLE_API_ISSUER_ID",
-        "ascApiKeyPath": "/root/.appstoreconnect/private_keys/AuthKey_2WG5YUFL55.p8",
+        "ascApiKeyPath": "$EXPO_APPLE_API_KEY_PATH",
+        "ascApiKeyIssuerId": "$EXPO_APPLE_API_ISSUER_ID",
+        "ascApiKeyId": "$EXPO_APPLE_API_KEY_ID",
         "appleTeamId": "5AUSX9646V",
         "language": "en-US"
       }
