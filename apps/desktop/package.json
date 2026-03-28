@@ -8,7 +8,7 @@
     "dev": "concurrently \"pnpm dev:electron\" \"pnpm dev:vite\"",
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5174 && electron .",
-    "build": "pnpm build:vite && pnpm build:electron",
+    "build": "pnpm build:electron",
     "build:vite": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "dist": "pnpm build && electron-builder",
