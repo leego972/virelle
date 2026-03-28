@@ -102,6 +102,10 @@ jobs:
       - run: pnpm --filter @virelle/mobile exec tsc --noEmit
 
   # ─── EAS Build (mobile) — only on main branch ───────────────────────
+  # Submits builds to EAS cloud with --no-wait so CI does not block on
+  # the remote compilation (which can take 10-30 min). EAS notifies via
+  # email/webhook when the build finishes. iOS is auto-submitted to the
+  # App Store via --auto-submit once the cloud build completes.
   eas-build:
     name: EAS Build (iOS + Android)
     runs-on: ubuntu-latest
@@ -127,24 +131,19 @@ jobs:
           echo "$APPLE_API_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
         env:
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
-      - name: Build on EAS
+      - name: Queue EAS build and auto-submit iOS
+        # --no-wait  : queue the build on EAS servers and exit immediately so
+        #              CI does not time out waiting for the 10-30 min compile.
+        # --auto-submit : EAS will submit the iOS binary to the App Store
+        #                 automatically once the cloud build succeeds, using
+        #                 the submit.production profile in eas.json.
         run: |
           pnpm --filter @virelle/mobile exec eas build \
             --platform all \
             --non-interactive \
-            --profile production
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EXPO_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          EXPO_APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-          EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Submit iOS to App Store
-        run: |
-          pnpm --filter @virelle/mobile exec eas submit \
-            --platform ios \
-            --non-interactive \
             --profile production \
-            --latest
+            --no-wait \
+            --auto-submit
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
