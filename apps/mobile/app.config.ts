@@ -44,7 +44,7 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
-  scheme: env.scheme,
+  scheme: [env.scheme, "virelle"],
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
   ios: {
@@ -72,6 +72,10 @@ const config: ExpoConfig = {
         data: [
           {
             scheme: env.scheme,
+            host: "*",
+          },
+          {
+            scheme: "virelle",
             host: "*",
           },
         ],

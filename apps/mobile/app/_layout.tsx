@@ -123,6 +123,7 @@ export default function RootLayout() {
               <Stack.Screen name="project/[id]" options={{ presentation: "card" }} />
               <Stack.Screen name="tool/[name]" options={{ presentation: "card" }} />
               <Stack.Screen name="onboarding" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
+              <Stack.Screen name="billing/callback" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
             </Stack>
           </AuthGuard>
           <StatusBar style="light" />
