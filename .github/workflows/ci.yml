@@ -131,15 +131,12 @@ jobs:
           echo "$APPLE_API_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
         env:
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
-      - name: Queue EAS build and auto-submit iOS
-        # --no-wait  : queue the build on EAS servers and exit immediately so
-        #              CI does not time out waiting for the 10-30 min compile.
-        # --auto-submit : EAS will submit the iOS binary to the App Store
-        #                 automatically once the cloud build succeeds, using
-        #                 the submit.production profile in eas.json.
+      - name: Queue iOS build (auto-submit to App Store)
+        # Builds iOS and auto-submits to App Store once the cloud build
+        # completes. --no-wait exits immediately; EAS notifies by email.
         run: |
           pnpm --filter @virelle/mobile exec eas build \
-            --platform all \
+            --platform ios \
             --non-interactive \
             --profile production \
             --no-wait \
@@ -149,6 +146,17 @@ jobs:
           EXPO_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           EXPO_APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Queue Android build
+        # Android Play Store submission requires a Google Service Account Key
+        # which is not yet configured — build only, no auto-submit.
+        run: |
+          pnpm --filter @virelle/mobile exec eas build \
+            --platform android \
+            --non-interactive \
+            --profile production \
+            --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
   # ─── Build desktop (Electron) — only on main branch ─────────────────
   build-desktop:
