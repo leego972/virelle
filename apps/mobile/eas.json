@@ -31,6 +31,8 @@
     "production": {
       "ios": {
         "ascApiKeyId": "2WG5YUFL55",
+        "ascApiKeyIssuerId": "$APPLE_API_ISSUER_ID",
+        "ascApiKeyPath": "/root/.appstoreconnect/private_keys/AuthKey_2WG5YUFL55.p8",
         "appleTeamId": "5AUSX9646V",
         "language": "en-US"
       }
