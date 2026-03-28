@@ -28,11 +28,6 @@
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleApiKeyId": "2WG5YUFL55",
-        "appleApiIssuerId": "d7c6c514-df7f-4adb-a4a0-b0553ea751a4"
-      }
-    }
+    "production": {}
   }
 }
