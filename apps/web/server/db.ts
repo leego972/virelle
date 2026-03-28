@@ -1,0 +1,1817 @@
+import { eq, and, asc, desc, isNull } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
+import { sql } from "drizzle-orm";
+import {
+  InsertUser, users,
+  InsertProject, projects,
+  InsertCharacter, characters,
+  InsertScene, scenes,
+  InsertGenerationJob, generationJobs,
+  InsertScript, scripts,
+  InsertSoundtrack, soundtracks,
+  InsertCredit, credits,
+  InsertLocation, locations,
+  InsertMoodBoardItem, moodBoardItems,
+  InsertSubtitle, subtitles,
+  InsertDialogue, dialogues,
+  InsertBudget, budgets,
+  InsertSoundEffect, soundEffects,
+  InsertCollaborator, collaborators,
+  InsertMovie, movies,
+  InsertDirectorChat, directorChats,
+  InsertPasswordResetToken, passwordResetTokens,
+  InsertVisualEffect, visualEffects,
+  InsertBlogArticle, blogArticles,
+  InsertReferralCode, referralCodes,
+  InsertReferralTracking, referralTracking,
+  InsertProjectSample, projectSamples, ProjectSample,
+} from "../drizzle/schema";
+import { ENV } from './_core/env';
+
+let _db: ReturnType<typeof drizzle> | null = null;
+
+export async function getDb() {
+  if (!_db && process.env.DATABASE_URL) {
+    try {
+      _db = drizzle(process.env.DATABASE_URL);
+    } catch (error) {
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
+    }
+  }
+  return _db;
+}
+
+// ─── Admin email list (canonical — used by ALL auth flows) ───
+export const ADMIN_EMAILS: string[] = [
+  "studiosvirelle@gmail.com",
+  "leego972@gmail.com",
+  "brobroplzcheck@gmail.com",
+  "sisteror555@gmail.com",
+];
+
+// ─── Users ───
+export async function upsertUser(user: InsertUser): Promise<void> {
+  if (!user.openId) throw new Error("User openId is required for upsert");
+  const db = await getDb();
+  if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
+  try {
+    const values: InsertUser = { openId: user.openId };
+    const updateSet: Record<string, unknown> = {};
+    const textFields = ["name", "email", "loginMethod"] as const;
+    type TextField = (typeof textFields)[number];
+    const assignNullable = (field: TextField) => {
+      const value = user[field];
+      if (value === undefined) return;
+      const normalized = value ?? null;
+      values[field] = normalized;
+      updateSet[field] = normalized;
+    };
+    textFields.forEach(assignNullable);
+    if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
+    // Auto-assign admin role: check ownerOpenId OR admin email list
+    const emailLower = (user.email || "").toLowerCase();
+    const isAdminByEmail = !!emailLower && ADMIN_EMAILS.includes(emailLower);
+    const isAdminByOpenId = user.openId === ENV.ownerOpenId;
+    if (user.role !== undefined) {
+      values.role = user.role;
+      updateSet.role = user.role;
+    } else if (isAdminByEmail || isAdminByOpenId) {
+      values.role = 'admin';
+      updateSet.role = 'admin';
+    }
+    if (!values.lastSignedIn) values.lastSignedIn = new Date();
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
+    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+    if (isAdminByEmail || isAdminByOpenId) {
+      console.log(`[Auth] Admin role assigned/confirmed for ${user.email || user.openId}`);
+    }
+  } catch (error) { console.error("[Database] Failed to upsert user:", error); throw error; }
+}
+
+export async function getUserByOpenId(openId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createEmailUser(data: {
+  email: string;
+  name: string;
+  passwordHash: string;
+  phone?: string;
+  country?: string;
+  city?: string;
+  timezone?: string;
+  companyName?: string;
+  companyWebsite?: string;
+  jobTitle?: string;
+  professionalRole?: string;
+  experienceLevel?: string;
+  industryType?: string;
+  teamSize?: string;
+  preferredGenres?: string[];
+  primaryUseCase?: string;
+  portfolioUrl?: string;
+  socialLinks?: Record<string, string>;
+  howDidYouHear?: string;
+  marketingOptIn?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const openId = `email_${data.email}`; // generate a stable openId from email
+  // Auto-assign admin role for the owner account (uses canonical ADMIN_EMAILS list)
+  const isOwner = ADMIN_EMAILS.includes(data.email.toLowerCase());
+  await db.insert(users).values({
+    openId,
+    email: data.email,
+    name: data.name,
+    passwordHash: data.passwordHash,
+    loginMethod: "email",
+    role: isOwner ? "admin" : "user",
+    lastSignedIn: new Date(),
+    phone: data.phone || null,
+    country: data.country || null,
+    city: data.city || null,
+    timezone: data.timezone || null,
+    companyName: data.companyName || null,
+    companyWebsite: data.companyWebsite || null,
+    jobTitle: data.jobTitle || null,
+    professionalRole: data.professionalRole || null,
+    experienceLevel: data.experienceLevel || null,
+    industryType: data.industryType || null,
+    teamSize: data.teamSize || null,
+    preferredGenres: data.preferredGenres || null,
+    primaryUseCase: data.primaryUseCase || null,
+    portfolioUrl: data.portfolioUrl || null,
+    socialLinks: data.socialLinks || null,
+    howDidYouHear: data.howDidYouHear || null,
+    marketingOptIn: data.marketingOptIn ?? false,
+    onboardingCompleted: true,
+  });
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result[0];
+}
+
+// ─── Projects ───
+export async function createProject(data: InsertProject) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(projects).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(projects).where(eq(projects.id, id)))[0];
+}
+
+export async function getUserProjects(userId: number, limit = 200) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(projects).where(eq(projects.userId, userId)).orderBy(desc(projects.updatedAt)).limit(limit);
+}
+
+export async function getProjectById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(projects).where(and(eq(projects.id, id), eq(projects.userId, userId))).limit(1);
+  return result[0];
+}
+
+export async function updateProject(id: number, userId: number, data: Partial<InsertProject>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(projects).set(data).where(and(eq(projects.id, id), eq(projects.userId, userId)));
+  return (await db.select().from(projects).where(eq(projects.id, id)))[0];
+}
+
+export async function deleteProject(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Cascade-delete all project-related data before removing the project itself
+  await db.delete(scenes).where(eq(scenes.projectId, id));
+  await db.delete(characters).where(eq(characters.projectId, id));
+  await db.delete(generationJobs).where(eq(generationJobs.projectId, id));
+  await db.delete(scripts).where(eq(scripts.projectId, id));
+  await db.delete(soundtracks).where(eq(soundtracks.projectId, id));
+  await db.delete(credits).where(eq(credits.projectId, id));
+  await db.delete(locations).where(eq(locations.projectId, id));
+  await db.delete(moodBoardItems).where(eq(moodBoardItems.projectId, id));
+  await db.delete(subtitles).where(eq(subtitles.projectId, id));
+  await db.delete(dialogues).where(eq(dialogues.projectId, id));
+  await db.delete(budgets).where(eq(budgets.projectId, id));
+  await db.delete(soundEffects).where(eq(soundEffects.projectId, id));
+  await db.delete(collaborators).where(eq(collaborators.projectId, id));
+  await db.delete(directorChats).where(eq(directorChats.projectId, id));
+  await db.delete(visualEffects).where(eq(visualEffects.projectId, id));
+  // Finally delete the project itself (ownership check)
+  await db.delete(projects).where(and(eq(projects.id, id), eq(projects.userId, userId)));
+}
+
+// ─── Characters ───
+export async function createCharacter(data: InsertCharacter) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(characters).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(characters).where(eq(characters.id, id)))[0];
+}
+
+export async function getProjectCharacters(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(characters).where(eq(characters.projectId, projectId)).orderBy(asc(characters.name));
+}
+
+export async function getUserLibraryCharacters(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(characters).where(and(eq(characters.userId, userId), isNull(characters.projectId))).orderBy(asc(characters.name));
+}
+
+export async function getCharacterById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(characters).where(eq(characters.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateCharacter(id: number, data: Partial<InsertCharacter>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(characters).set(data).where(eq(characters.id, id));
+  return (await db.select().from(characters).where(eq(characters.id, id)))[0];
+}
+
+export async function deleteCharacter(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(characters).where(eq(characters.id, id));
+}
+
+// ─── Scenes ───
+// ─── Enum value sanitization for scene columns ───
+const SCENE_ENUM_VALUES: Record<string, { valid: string[]; fallback: string; aliases: Record<string, string> }> = {
+  timeOfDay: {
+    valid: ["dawn", "morning", "afternoon", "evening", "night", "golden-hour"],
+    fallback: "afternoon",
+    aliases: {
+      "day": "afternoon", "daytime": "afternoon", "midday": "afternoon", "noon": "afternoon",
+      "dusk": "evening", "sunset": "golden-hour", "sunrise": "dawn", "twilight": "evening",
+      "late afternoon": "golden-hour", "early morning": "dawn", "late night": "night",
+      "nighttime": "night", "midnight": "night", "golden hour": "golden-hour",
+    },
+  },
+  weather: {
+    valid: ["clear", "cloudy", "rainy", "stormy", "snowy", "foggy", "windy"],
+    fallback: "clear",
+    aliases: {
+      "sunny": "clear", "overcast": "cloudy", "rain": "rainy", "storm": "stormy",
+      "snow": "snowy", "fog": "foggy", "wind": "windy", "partly cloudy": "cloudy",
+      "misty": "foggy", "hazy": "foggy", "drizzle": "rainy", "thunderstorm": "stormy",
+    },
+  },
+  lighting: {
+    valid: ["natural", "dramatic", "soft", "neon", "candlelight", "studio", "backlit", "silhouette"],
+    fallback: "natural",
+    aliases: {
+      "ambient": "natural", "harsh": "dramatic", "warm": "soft", "fluorescent": "studio",
+      "dim": "candlelight", "low": "candlelight", "bright": "natural", "moody": "dramatic",
+      "cinematic": "dramatic", "golden": "natural", "neon-lit": "neon",
+    },
+  },
+  cameraAngle: {
+    valid: ["wide", "medium", "close-up", "extreme-close-up", "birds-eye", "low-angle", "dutch-angle", "over-shoulder", "pov"],
+    fallback: "medium",
+    aliases: {
+      "closeup": "close-up", "close up": "close-up", "extreme close-up": "extreme-close-up",
+      "extreme closeup": "extreme-close-up", "bird's eye": "birds-eye", "bird's-eye": "birds-eye",
+      "aerial": "birds-eye", "overhead": "birds-eye", "low angle": "low-angle",
+      "high angle": "birds-eye", "dutch angle": "dutch-angle", "tilted": "dutch-angle",
+      "over the shoulder": "over-shoulder", "ots": "over-shoulder", "first person": "pov",
+      "establishing": "wide", "full shot": "wide", "medium shot": "medium",
+      "tracking": "medium", "tracking shot": "medium",
+    },
+  },
+};
+
+function sanitizeEnumValue(column: string, value: unknown): unknown {
+  const enumDef = SCENE_ENUM_VALUES[column];
+  if (!enumDef || typeof value !== "string") return value;
+  const lower = value.toLowerCase().trim();
+  // Check if already valid
+  if (enumDef.valid.includes(lower)) return lower;
+  // Check aliases
+  if (enumDef.aliases[lower]) return enumDef.aliases[lower];
+  // Fuzzy match: check if any valid value is contained in the input
+  for (const v of enumDef.valid) {
+    if (lower.includes(v) || v.includes(lower)) return v;
+  }
+  console.warn(`[createScene] Sanitizing ${column}: "${value}" -> "${enumDef.fallback}" (not a valid enum value)`);
+  return enumDef.fallback;
+}
+
+export async function createScene(data: InsertScene) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Sanitize enum values before building the INSERT
+  const sanitizedData = { ...data } as Record<string, unknown>;
+  for (const col of Object.keys(SCENE_ENUM_VALUES)) {
+    if (col in sanitizedData && sanitizedData[col] !== undefined && sanitizedData[col] !== null) {
+      sanitizedData[col] = sanitizeEnumValue(col, sanitizedData[col]);
+    }
+  }
+  
+  // Build a minimal INSERT with only the columns that are explicitly provided.
+  // Uses Drizzle's sql template tag for proper parameterization.
+  const entries = Object.entries(sanitizedData).filter(
+    ([_, v]) => v !== undefined
+  );
+  if (entries.length === 0) throw new Error("No data to insert");
+  
+  const columns = entries.map(([k]) => k);
+  const vals = entries.map(([_, v]) => {
+    if (v === null) return null;
+    if (typeof v === "object") return JSON.stringify(v);
+    if (typeof v === "boolean") return v ? 1 : 0;
+    return v;
+  });
+  
+  // Build: INSERT INTO scenes (`col1`, `col2`) VALUES (val1, val2)
+  const colsSql = sql.raw(columns.map(c => `\`${c}\``).join(", "));
+  const valChunks = vals.map(v => sql`${v}`);
+  const valsSql = sql.join(valChunks, sql.raw(", "));
+  
+  try {
+    const insertResult = await db.execute(
+      sql`INSERT INTO scenes (${colsSql}) VALUES (${valsSql})`
+    );
+    const id = (insertResult as any)[0]?.insertId;
+    if (!id) throw new Error("Failed to get insert ID");
+    const [rows] = await db.execute(sql`SELECT * FROM scenes WHERE id = ${id} LIMIT 1`);
+    return (rows as unknown as any[])?.[0];
+  } catch (err: any) {
+    // Capture MySQL-specific error details with full context
+    const sqlMsg = err.sqlMessage || err.message || 'no message';
+    const code = err.code || err.errno || 'UNKNOWN';
+    const fullErr = JSON.stringify({ code: err.code, errno: err.errno, sqlState: err.sqlState, sqlMessage: err.sqlMessage, message: err.message?.slice(0, 300) });
+    console.error(`[createScene] Full error:`, fullErr);
+    console.error(`[createScene] Columns attempted:`, columns);
+    throw new Error(`Scene insert failed [${code}]: ${sqlMsg}. Debug: ${fullErr}`);
+  }
+}
+
+export async function getProjectScenes(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const [rows] = await db.execute(sql`SELECT * FROM scenes WHERE projectId = ${projectId} ORDER BY orderIndex ASC`);
+  return rows as unknown as any[];
+}
+
+export async function getSceneById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [rows] = await db.execute(sql`SELECT * FROM scenes WHERE id = ${id} LIMIT 1`);
+  return (rows as unknown as any[])?.[0];
+}
+
+export async function updateScene(id: number, data: Partial<InsertScene>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Use raw SQL to only update columns that are explicitly provided
+  const entries = Object.entries(data).filter(([_, v]) => v !== undefined);
+  if (entries.length === 0) return getSceneById(id);
+  const setClauses = entries.map(([k]) => `\`${k}\` = ?`).join(", ");
+  const values = entries.map(([_, v]) => {
+    if (v === null) return null;
+    if (typeof v === "object") return JSON.stringify(v);
+    if (typeof v === "boolean") return v ? 1 : 0;
+    return v;
+  });
+  const setSQL = entries.map(([k], i) => sql`${sql.raw(`\`${k}\``)} = ${values[i]}`).reduce((acc, s, i) => i === 0 ? s : sql`${acc}, ${s}`);
+  await db.execute(sql`UPDATE scenes SET ${setSQL} WHERE id = ${id}`);
+  return getSceneById(id);
+}
+
+export async function deleteScene(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(scenes).where(eq(scenes.id, id));
+}
+
+export async function reorderScenes(projectId: number, sceneIds: number[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  for (let i = 0; i < sceneIds.length; i++) {
+    await db.update(scenes).set({ orderIndex: i }).where(and(eq(scenes.id, sceneIds[i]), eq(scenes.projectId, projectId)));
+  }
+}
+
+// ─── Generation Jobs ───
+export async function createGenerationJob(data: InsertGenerationJob) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(generationJobs).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(generationJobs).where(eq(generationJobs.id, id)))[0];
+}
+
+export async function getProjectJobs(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(generationJobs).where(eq(generationJobs.projectId, projectId)).orderBy(desc(generationJobs.createdAt));
+}
+
+export async function getJobById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(generationJobs).where(eq(generationJobs.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateJob(id: number, data: Partial<InsertGenerationJob>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(generationJobs).set(data).where(eq(generationJobs.id, id));
+  return (await db.select().from(generationJobs).where(eq(generationJobs.id, id)))[0];
+}
+
+// ─── Scripts ───
+export async function createScript(data: InsertScript) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(scripts).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(scripts).where(eq(scripts.id, id)))[0];
+}
+
+export async function getProjectScripts(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(scripts).where(eq(scripts.projectId, projectId)).orderBy(desc(scripts.updatedAt));
+}
+
+export async function getScriptById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(scripts).where(eq(scripts.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateScript(id: number, userId: number, data: Partial<InsertScript>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(scripts).set(data).where(and(eq(scripts.id, id), eq(scripts.userId, userId)));
+  return (await db.select().from(scripts).where(eq(scripts.id, id)))[0];
+}
+
+export async function deleteScript(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(scripts).where(and(eq(scripts.id, id), eq(scripts.userId, userId)));
+}
+
+// ─── Soundtracks ───
+export async function createSoundtrack(data: InsertSoundtrack) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(soundtracks).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(soundtracks).where(eq(soundtracks.id, id)))[0];
+}
+
+export async function getProjectSoundtracks(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(soundtracks).where(and(eq(soundtracks.projectId, projectId), isNull(soundtracks.sceneId))).orderBy(desc(soundtracks.createdAt));
+}
+
+export async function getSceneSoundtracks(sceneId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(soundtracks).where(eq(soundtracks.sceneId, sceneId)).orderBy(asc(soundtracks.startTime));
+}
+
+export async function getSoundtrackById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(soundtracks).where(eq(soundtracks.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateSoundtrack(id: number, userId: number, data: Partial<InsertSoundtrack>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(soundtracks).set(data).where(and(eq(soundtracks.id, id), eq(soundtracks.userId, userId)));
+  return (await db.select().from(soundtracks).where(eq(soundtracks.id, id)))[0];
+}
+
+export async function deleteSoundtrack(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(soundtracks).where(and(eq(soundtracks.id, id), eq(soundtracks.userId, userId)));
+}
+
+export async function deleteProjectSoundtracks(projectId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(soundtracks).where(eq(soundtracks.projectId, projectId));
+}
+
+// ─── Credits ───
+export async function createCredit(data: InsertCredit) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(credits).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(credits).where(eq(credits.id, id)))[0];
+}
+
+export async function getProjectCredits(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(credits).where(eq(credits.projectId, projectId)).orderBy(asc(credits.orderIndex));
+}
+
+export async function updateCredit(id: number, data: Partial<InsertCredit>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(credits).set(data).where(eq(credits.id, id));
+  return (await db.select().from(credits).where(eq(credits.id, id)))[0];
+}
+
+export async function deleteCredit(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(credits).where(eq(credits.id, id));
+}
+
+export async function deleteProjectCredits(projectId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(credits).where(eq(credits.projectId, projectId));
+}
+
+// ─── Project Duplication ───
+export async function duplicateProject(projectId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Get original project
+  const original = await getProjectById(projectId, userId);
+  if (!original) throw new Error("Project not found");
+  
+  // Create new project
+  const newProject = await createProject({
+    userId,
+    title: `${original.title} (Copy)`,
+    description: original.description,
+    mode: original.mode,
+    rating: original.rating,
+    duration: original.duration,
+    genre: original.genre,
+    plotSummary: original.plotSummary,
+    status: "draft",
+    resolution: original.resolution,
+    quality: original.quality,
+    colorGrading: original.colorGrading,
+    colorGradingSettings: original.colorGradingSettings,
+  });
+  
+  // Duplicate characters
+  const origChars = await getProjectCharacters(projectId);
+  const charIdMap = new Map<number, number>();
+  for (const char of origChars) {
+    const newChar = await createCharacter({
+      userId,
+      projectId: newProject.id,
+      name: char.name,
+      description: char.description,
+      photoUrl: char.photoUrl,
+      attributes: char.attributes,
+    });
+    charIdMap.set(char.id, newChar.id);
+  }
+  
+  // Duplicate scenes
+  const origScenes = await getProjectScenes(projectId);
+  for (const scene of origScenes) {
+    const newCharIds = (scene.characterIds as number[] || []).map(id => charIdMap.get(id) || id);
+    await createScene({
+      projectId: newProject.id,
+      orderIndex: scene.orderIndex,
+      title: scene.title,
+      description: scene.description,
+      timeOfDay: scene.timeOfDay,
+      weather: scene.weather,
+      lighting: scene.lighting,
+      cameraAngle: scene.cameraAngle,
+      locationType: scene.locationType,
+      realEstateStyle: scene.realEstateStyle,
+      vehicleType: scene.vehicleType,
+      mood: scene.mood,
+      characterIds: newCharIds,
+      characterPositions: scene.characterPositions,
+      dialogueText: scene.dialogueText,
+      duration: scene.duration,
+      transitionType: scene.transitionType,
+      transitionDuration: scene.transitionDuration,
+      colorGrading: scene.colorGrading,
+      productionNotes: scene.productionNotes,
+      status: "draft",
+    });
+  }
+  
+  // Duplicate soundtracks
+  const origSoundtracks = await getProjectSoundtracks(projectId);
+  for (const st of origSoundtracks) {
+    await createSoundtrack({
+      projectId: newProject.id,
+      userId,
+      title: st.title,
+      artist: st.artist,
+      genre: st.genre,
+      mood: st.mood,
+      fileUrl: st.fileUrl,
+      fileKey: st.fileKey,
+      duration: st.duration,
+      volume: st.volume,
+      fadeIn: st.fadeIn,
+      fadeOut: st.fadeOut,
+      loop: st.loop,
+      notes: st.notes,
+    });
+  }
+  
+  // Duplicate credits
+  const origCredits = await getProjectCredits(projectId);
+  for (const cr of origCredits) {
+    await createCredit({
+      projectId: newProject.id,
+      userId,
+      role: cr.role,
+      name: cr.name,
+      characterName: cr.characterName,
+      orderIndex: cr.orderIndex,
+      section: cr.section,
+    });
+  }
+  
+  return newProject;
+}
+
+// ─── Locations ───
+export async function createLocation(data: InsertLocation) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(locations).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(locations).where(eq(locations.id, id)))[0];
+}
+
+export async function getProjectLocations(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(locations).where(eq(locations.projectId, projectId)).orderBy(desc(locations.createdAt));
+}
+
+export async function getLocationById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(locations).where(eq(locations.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateLocation(id: number, data: Partial<InsertLocation>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(locations).set(data).where(eq(locations.id, id));
+  return (await db.select().from(locations).where(eq(locations.id, id)))[0];
+}
+
+export async function deleteLocation(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(locations).where(eq(locations.id, id));
+}
+
+// ─── Mood Board ───
+export async function createMoodBoardItem(data: InsertMoodBoardItem) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(moodBoardItems).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(moodBoardItems).where(eq(moodBoardItems.id, id)))[0];
+}
+
+export async function getProjectMoodBoard(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(moodBoardItems).where(eq(moodBoardItems.projectId, projectId)).orderBy(desc(moodBoardItems.createdAt));
+}
+
+export async function updateMoodBoardItem(id: number, data: Partial<InsertMoodBoardItem>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(moodBoardItems).set(data).where(eq(moodBoardItems.id, id));
+  return (await db.select().from(moodBoardItems).where(eq(moodBoardItems.id, id)))[0];
+}
+
+export async function deleteMoodBoardItem(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(moodBoardItems).where(eq(moodBoardItems.id, id));
+}
+
+// ─── Subtitles ───
+export async function createSubtitle(data: InsertSubtitle) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(subtitles).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(subtitles).where(eq(subtitles.id, id)))[0];
+}
+
+export async function getProjectSubtitles(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(subtitles).where(eq(subtitles.projectId, projectId)).orderBy(asc(subtitles.languageName));
+}
+
+export async function getSubtitleById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(subtitles).where(eq(subtitles.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateSubtitle(id: number, data: Partial<InsertSubtitle>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(subtitles).set(data).where(eq(subtitles.id, id));
+  return (await db.select().from(subtitles).where(eq(subtitles.id, id)))[0];
+}
+
+export async function deleteSubtitle(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(subtitles).where(eq(subtitles.id, id));
+}
+
+// ─── Dialogues ───
+export async function createDialogue(data: InsertDialogue) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(dialogues).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(dialogues).where(eq(dialogues.id, id)))[0];
+}
+
+export async function getProjectDialogues(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(dialogues).where(eq(dialogues.projectId, projectId)).orderBy(asc(dialogues.orderIndex));
+}
+
+export async function getSceneDialogues(sceneId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(dialogues).where(eq(dialogues.sceneId, sceneId)).orderBy(asc(dialogues.orderIndex));
+}
+
+export async function getDialogueById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(dialogues).where(eq(dialogues.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateDialogue(id: number, data: Partial<InsertDialogue>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(dialogues).set(data).where(eq(dialogues.id, id));
+  return (await db.select().from(dialogues).where(eq(dialogues.id, id)))[0];
+}
+
+export async function deleteDialogue(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(dialogues).where(eq(dialogues.id, id));
+}
+
+export async function deleteProjectDialogues(projectId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(dialogues).where(eq(dialogues.projectId, projectId));
+}
+
+// ─── Budgets ───
+export async function createBudget(data: InsertBudget) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(budgets).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(budgets).where(eq(budgets.id, id)))[0];
+}
+
+export async function getProjectBudgets(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(budgets).where(eq(budgets.projectId, projectId)).orderBy(desc(budgets.createdAt));
+}
+
+export async function getBudgetById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(budgets).where(eq(budgets.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateBudget(id: number, data: Partial<InsertBudget>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(budgets).set(data).where(eq(budgets.id, id));
+  return (await db.select().from(budgets).where(eq(budgets.id, id)))[0];
+}
+
+export async function deleteBudget(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(budgets).where(eq(budgets.id, id));
+}
+
+// ─── Sound Effects ───
+export async function createSoundEffect(data: InsertSoundEffect) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(soundEffects).values(data);
+  const rows = await db.select().from(soundEffects).where(eq(soundEffects.projectId, data.projectId)).orderBy(soundEffects.id);
+  return rows[rows.length - 1];
+}
+
+export async function listSoundEffectsByProject(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(soundEffects).where(eq(soundEffects.projectId, projectId)).orderBy(soundEffects.category, soundEffects.name);
+}
+
+export async function listSoundEffectsByScene(sceneId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(soundEffects).where(eq(soundEffects.sceneId, sceneId)).orderBy(soundEffects.startTime);
+}
+
+export async function updateSoundEffect(id: number, data: Partial<InsertSoundEffect>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(soundEffects).set(data).where(eq(soundEffects.id, id));
+  const rows = await db.select().from(soundEffects).where(eq(soundEffects.id, id));
+  return rows[0];
+}
+
+export async function deleteSoundEffect(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(soundEffects).where(eq(soundEffects.id, id));
+}
+
+// ─── Visual Effects ───
+export async function createVisualEffect(data: InsertVisualEffect) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(visualEffects).values(data);
+  const rows = await db.select().from(visualEffects).where(eq(visualEffects.projectId, data.projectId)).orderBy(visualEffects.id);
+  return rows[rows.length - 1];
+}
+
+export async function listVisualEffectsByProject(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(visualEffects).where(eq(visualEffects.projectId, projectId)).orderBy(visualEffects.category, visualEffects.name);
+}
+
+export async function listVisualEffectsByScene(sceneId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(visualEffects).where(eq(visualEffects.sceneId, sceneId)).orderBy(visualEffects.startTime);
+}
+
+export async function updateVisualEffect(id: number, data: Partial<InsertVisualEffect>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(visualEffects).set(data).where(eq(visualEffects.id, id));
+  const rows = await db.select().from(visualEffects).where(eq(visualEffects.id, id));
+  return rows[0];
+}
+
+export async function deleteVisualEffect(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(visualEffects).where(eq(visualEffects.id, id));
+}
+
+// ─── Collaborators ───
+export async function createCollaborator(data: InsertCollaborator) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(collaborators).values(data);
+  const rows = await db.select().from(collaborators).where(eq(collaborators.inviteToken, data.inviteToken));
+  return rows[0];
+}
+
+export async function listCollaboratorsByProject(projectId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(collaborators).where(eq(collaborators.projectId, projectId)).orderBy(collaborators.createdAt);
+}
+
+export async function getCollaboratorByToken(token: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(collaborators).where(eq(collaborators.inviteToken, token));
+  return rows[0];
+}
+
+export async function updateCollaborator(id: number, data: Partial<InsertCollaborator>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(collaborators).set(data).where(eq(collaborators.id, id));
+  const rows = await db.select().from(collaborators).where(eq(collaborators.id, id));
+  return rows[0];
+}
+
+export async function deleteCollaborator(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(collaborators).where(eq(collaborators.id, id));
+}
+
+// ─── Movies ───
+export async function createMovie(data: InsertMovie) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(movies).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(movies).where(eq(movies.id, id)))[0];
+}
+
+export async function getUserMovies(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(movies).where(eq(movies.userId, userId)).orderBy(desc(movies.updatedAt));
+}
+
+export async function getMovieById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(movies).where(and(eq(movies.id, id), eq(movies.userId, userId))).limit(1);
+  return result[0];
+}
+
+export async function updateMovie(id: number, userId: number, data: Partial<InsertMovie>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(movies).set(data).where(and(eq(movies.id, id), eq(movies.userId, userId)));
+  return (await db.select().from(movies).where(eq(movies.id, id)))[0];
+}
+
+export async function deleteMovie(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(movies).where(and(eq(movies.id, id), eq(movies.userId, userId)));
+}
+
+// Director Chat helpers
+export async function createChatMessage(data: InsertDirectorChat) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(directorChats).values(data);
+  return { id: Number(result[0].insertId), ...data };
+}
+
+export async function getProjectChatHistory(projectId: number, userId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(directorChats)
+    .where(and(eq(directorChats.projectId, projectId), eq(directorChats.userId, userId)))
+    .orderBy(desc(directorChats.createdAt))
+    .limit(limit);
+}
+
+export async function clearProjectChat(projectId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(directorChats)
+    .where(and(eq(directorChats.projectId, projectId), eq(directorChats.userId, userId)));
+}
+
+
+// ─── Password Reset Tokens ───
+export async function createPasswordResetToken(userId: number, token: string, expiresAt: Date) {
+  const db = await getDb();
+  if (!db) return null;
+  await db.insert(passwordResetTokens).values({ userId, token, expiresAt });
+  return { userId, token, expiresAt };
+}
+
+export async function getPasswordResetToken(token: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(passwordResetTokens)
+    .where(eq(passwordResetTokens.token, token))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function markTokenUsed(tokenId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(passwordResetTokens)
+    .set({ used: true })
+    .where(eq(passwordResetTokens.id, tokenId));
+}
+
+export async function updateUserPassword(userId: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
+// ─── Admin User Management ───
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+    loginMethod: users.loginMethod,
+    createdAt: users.createdAt,
+    lastSignedIn: users.lastSignedIn,
+  }).from(users).orderBy(desc(users.createdAt));
+}
+
+export async function updateUserRole(userId: number, role: "user" | "admin") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users)
+    .set({ role, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
+// ─── Subscription ───
+export async function updateUserSubscription(userId: number, data: {
+  subscriptionTier?: "independent" | "industry";
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string | null;
+  subscriptionStatus?: "active" | "canceled" | "past_due" | "unpaid" | "trialing" | "none";
+  subscriptionCurrentPeriodEnd?: Date | null;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
+export async function getUserByStripeCustomerId(customerId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const [user] = await db.select().from(users).where(eq(users.stripeCustomerId, customerId)).limit(1);
+  return user ?? null;
+}
+
+export async function incrementGenerationCount(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) return;
+
+  const now = new Date();
+  const resetAt = user.monthlyGenerationsResetAt;
+
+  // If no reset date or past reset date, reset counter
+  if (!resetAt || now > new Date(resetAt)) {
+    const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    await db.update(users).set({
+      monthlyGenerationsUsed: 1,
+      monthlyGenerationsResetAt: nextReset,
+    }).where(eq(users.id, userId));
+  } else {
+    await db.update(users).set({
+      monthlyGenerationsUsed: (user.monthlyGenerationsUsed || 0) + 1,
+    }).where(eq(users.id, userId));
+  }
+}
+
+/**
+ * Reset the monthly generation counter for a user.
+ * Called on subscription activation, upgrade, or renewal to give fresh quota.
+ */
+export async function resetGenerationCounter(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const nextReset = new Date();
+  nextReset.setMonth(nextReset.getMonth() + 1);
+  nextReset.setDate(1);
+  nextReset.setHours(0, 0, 0, 0);
+  await db.update(users).set({
+    monthlyGenerationsUsed: 0,
+    monthlyGenerationsResetAt: nextReset,
+  }).where(eq(users.id, userId));
+}
+
+export async function getUserProjectCount(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select().from(projects).where(eq(projects.userId, userId));
+  return result.length;
+}
+
+export async function getUserMovieCount(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select().from(movies).where(eq(movies.userId, userId));
+  return result.length;
+}
+
+// ─── Blog Articles ───
+export async function createBlogArticle(data: InsertBlogArticle) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(blogArticles).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(blogArticles).where(eq(blogArticles.id, id)))[0];
+}
+
+export async function getPublishedArticles(limit = 20, offset = 0) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(blogArticles)
+    .where(eq(blogArticles.status, "published"))
+    .orderBy(desc(blogArticles.publishedAt))
+    .limit(limit)
+    .offset(offset);
+}
+
+export async function getArticleBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(blogArticles).where(eq(blogArticles.slug, slug)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getArticlesByCategory(category: string, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(blogArticles)
+    .where(and(eq(blogArticles.category, category), eq(blogArticles.status, "published")))
+    .orderBy(desc(blogArticles.publishedAt))
+    .limit(limit);
+}
+
+export async function incrementArticleViews(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  const article = await db.select().from(blogArticles).where(eq(blogArticles.id, id)).limit(1);
+  if (article[0]) {
+    await db.update(blogArticles).set({ viewCount: (article[0].viewCount || 0) + 1 }).where(eq(blogArticles.id, id));
+  }
+}
+
+export async function getAllArticles(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(blogArticles).orderBy(desc(blogArticles.createdAt)).limit(limit);
+}
+
+export async function updateBlogArticle(id: number, data: Partial<InsertBlogArticle>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(blogArticles).set(data).where(eq(blogArticles.id, id));
+  return (await db.select().from(blogArticles).where(eq(blogArticles.id, id)))[0];
+}
+
+export async function deleteBlogArticle(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(blogArticles).where(eq(blogArticles.id, id));
+}
+
+export async function getPublishedArticleCount() {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select().from(blogArticles).where(eq(blogArticles.status, "published"));
+  return result.length;
+}
+
+// ─── Referral Codes ───
+export async function createReferralCode(data: InsertReferralCode) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(referralCodes).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(referralCodes).where(eq(referralCodes.id, id)))[0];
+}
+
+export async function getReferralCodeByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(referralCodes).where(eq(referralCodes.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getReferralCodeByCode(code: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(referralCodes).where(eq(referralCodes.code, code)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateReferralCode(id: number, data: Partial<InsertReferralCode>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(referralCodes).set(data).where(eq(referralCodes.id, id));
+  return (await db.select().from(referralCodes).where(eq(referralCodes.id, id)))[0];
+}
+
+// ─── Referral Tracking ───
+export async function createReferralTracking(data: InsertReferralTracking) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(referralTracking).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(referralTracking).where(eq(referralTracking.id, id)))[0];
+}
+
+export async function getReferralTrackingByCode(referralCodeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(referralTracking)
+    .where(eq(referralTracking.referralCodeId, referralCodeId))
+    .orderBy(desc(referralTracking.createdAt));
+}
+
+export async function getReferralTrackingByReferredUser(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(referralTracking)
+    .where(eq(referralTracking.referredUserId, userId))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateReferralTracking(id: number, data: Partial<InsertReferralTracking>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(referralTracking).set(data).where(eq(referralTracking.id, id));
+  return (await db.select().from(referralTracking).where(eq(referralTracking.id, id)))[0];
+}
+
+export async function addBonusGenerations(userId: number, amount: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const user = await getUserById(userId);
+  if (!user) return;
+  // Add to the bonusGenerations pool — these persist across monthly resets
+  // and are counted alongside the monthly limit when checking quota
+  const currentBonus = user.bonusGenerations || 0;
+  await db.update(users).set({ 
+    bonusGenerations: currentBonus + amount 
+  }).where(eq(users.id, userId));
+}
+
+// ─── BYOK API Key Management ───
+
+export async function updateUserApiKey(userId: number, column: string, value: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Use raw SQL since column name is dynamic
+  if (value === null) {
+    await db.execute(
+      sql`UPDATE users SET ${sql.raw(column)} = NULL, apiKeysUpdatedAt = NOW() WHERE id = ${userId}`
+    );
+  } else {
+    await db.execute(
+      sql`UPDATE users SET ${sql.raw(column)} = ${value}, apiKeysUpdatedAt = NOW() WHERE id = ${userId}`
+    );
+  }
+}
+
+export async function updateUserPreferredProvider(userId: number, provider: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users)
+    .set({ preferredVideoProvider: provider } as any)
+    .where(eq(users.id, userId));
+}
+
+export async function getUserApiKeys(userId: number): Promise<{
+  openaiKey: string | null;
+  runwayKey: string | null;
+  replicateKey: string | null;
+  falKey: string | null;
+  lumaKey: string | null;
+  hfToken: string | null;
+  elevenlabsKey: string | null;
+  sunoKey: string | null;
+  byteplusKey: string | null;
+  anthropicKey: string | null;
+  googleAiKey: string | null;
+  preferredProvider: string | null;
+  preferredLlmProvider: string | null;
+}> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("User not found");
+
+  // Decode base64-encoded keys
+  const decode = (val: string | null | undefined): string | null => {
+    if (!val) return null;
+    try {
+      return Buffer.from(val, "base64").toString("utf-8");
+    } catch {
+      return val; // Already plain text
+    }
+  };
+
+  return {
+    openaiKey: decode((user as any).userOpenaiKey),
+    runwayKey: decode((user as any).userRunwayKey),
+    replicateKey: decode((user as any).userReplicateKey),
+    falKey: decode((user as any).userFalKey),
+    lumaKey: decode((user as any).userLumaKey),
+    hfToken: decode((user as any).userHfToken),
+    elevenlabsKey: decode((user as any).userElevenlabsKey),
+    sunoKey: decode((user as any).userSunoKey),
+    byteplusKey: decode((user as any).userByteplusKey),
+    anthropicKey: decode((user as any).userAnthropicKey),
+    googleAiKey: decode((user as any).userGoogleAiKey),
+    preferredProvider: (user as any).preferredVideoProvider || null,
+    preferredLlmProvider: (user as any).preferredLlmProvider || null,
+  };
+}
+
+export async function updateUserProfile(userId: number, data: {
+  name?: string;
+  phone?: string | null;
+  bio?: string | null;
+  country?: string | null;
+  city?: string | null;
+  timezone?: string | null;
+  companyName?: string | null;
+  companyWebsite?: string | null;
+  jobTitle?: string | null;
+  professionalRole?: string | null;
+  experienceLevel?: string | null;
+  portfolioUrl?: string | null;
+  socialLinks?: Record<string, unknown> | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users)
+    .set({ ...data, updatedAt: new Date() } as any)
+    .where(eq(users.id, userId));
+}
+
+// ─── Director Instructions ───
+export async function saveDirectorInstructions(userId: number, instructions: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users)
+    .set({ directorInstructions: instructions, updatedAt: new Date() } as any)
+    .where(eq(users.id, userId));
+}
+
+// ─── Notifications ───
+export async function createNotification(data: {
+  userId: number;
+  type?: "generation_complete" | "export_complete" | "subscription_change" | "referral_reward" | "system" | "welcome" | "tip";
+  title: string;
+  message?: string;
+  link?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { notifications } = await import("../drizzle/schema");
+  const [result] = await db.insert(notifications).values({
+    userId: data.userId,
+    type: data.type || "system",
+    title: data.title,
+    message: data.message || null,
+    link: data.link || null,
+  } as any);
+  return { id: (result as any).insertId };
+}
+
+export async function getUserNotifications(userId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  const { notifications } = await import("../drizzle/schema");
+  return db.select().from(notifications)
+    .where(eq(notifications.userId, userId))
+    .orderBy(desc(notifications.createdAt))
+    .limit(limit);
+}
+
+export async function getUnreadNotificationCount(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const { notifications } = await import("../drizzle/schema");
+  const rows = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(notifications)
+    .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+  return rows[0]?.count || 0;
+}
+
+export async function markNotificationRead(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const { notifications } = await import("../drizzle/schema");
+  await db.update(notifications)
+    .set({ isRead: true } as any)
+    .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
+}
+
+export async function markAllNotificationsRead(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const { notifications } = await import("../drizzle/schema");
+  await db.update(notifications)
+    .set({ isRead: true } as any)
+    .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+}
+
+export async function deleteNotification(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const { notifications } = await import("../drizzle/schema");
+  await db.delete(notifications)
+    .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
+}
+
+// ============================================================
+// CREDIT SYSTEM
+// ============================================================
+
+/**
+ * Deduct credits from a user's balance. Returns the new balance.
+ * Throws if insufficient credits.
+ */
+export async function deductCredits(userId: number, amount: number, action: string, description?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [user] = await db.select({ creditBalance: users.creditBalance, role: users.role, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user) throw new Error("User not found");
+
+  // Admins have unlimited credits — skip deduction entirely (check both role and email)
+  const isAdminUser = (user.role as string) === "admin" ||
+    ADMIN_EMAILS.includes(((user as any).email || "").toLowerCase());
+  if (isAdminUser) {
+    console.log(`[Credits] Admin user ${userId}: skipping ${amount} credit deduction for ${action} (unlimited)`);
+    // Still log the transaction for auditing, but don't deduct
+    try {
+      const currentBalance = (user.creditBalance as number) || 0;
+      await db.execute(sql.raw(
+        `INSERT INTO credit_transactions (userId, amount, action, description, balanceAfter, createdAt) VALUES (${userId}, 0, '${action.replace(/'/g, "''")}', 'ADMIN_UNLIMITED: ${(description || action).replace(/'/g, "''")}', ${currentBalance}, NOW())`
+      ));
+    } catch (e) {
+      console.warn("[Credits] Failed to log admin transaction:", e);
+    }
+    return (user.creditBalance as number) || 999999;
+  }
+
+  const currentBalance = (user.creditBalance as number) || 0;
+  if (currentBalance < amount) {
+    throw new Error(
+      `INSUFFICIENT_CREDITS: This action requires ${amount} credit${amount !== 1 ? "s" : ""}. You have ${currentBalance} credits remaining. Purchase a credit pack to continue.`
+    );
+  }
+
+  const newBalance = currentBalance - amount;
+
+  await db.update(users)
+    .set({ creditBalance: newBalance } as any)
+    .where(eq(users.id, userId));
+
+  // Log the transaction (non-critical)
+  try {
+    await db.execute(sql.raw(
+      `INSERT INTO credit_transactions (userId, amount, action, description, balanceAfter, createdAt) VALUES (${userId}, ${-amount}, '${action.replace(/'/g, "''")}', '${(description || action).replace(/'/g, "''")}', ${newBalance}, NOW())`
+    ));
+  } catch (e) {
+    console.warn("[Credits] Failed to log transaction:", e);
+  }
+
+  console.log(`[Credits] User ${userId}: -${amount} credits for ${action} (balance: ${newBalance})`);
+  return newBalance;
+}
+
+/**
+ * Add credits to a user's balance (from purchase or monthly grant).
+ */
+export async function addCredits(userId: number, amount: number, action: string, description?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [user] = await db.select({ creditBalance: users.creditBalance })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user) throw new Error("User not found");
+
+  const currentBalance = (user.creditBalance as number) || 0;
+  const newBalance = currentBalance + amount;
+
+  await db.update(users)
+    .set({ creditBalance: newBalance } as any)
+    .where(eq(users.id, userId));
+
+  try {
+    await db.execute(sql.raw(
+      `INSERT INTO credit_transactions (userId, amount, action, description, balanceAfter, createdAt) VALUES (${userId}, ${amount}, '${action.replace(/'/g, "''")}', '${(description || action).replace(/'/g, "''")}', ${newBalance}, NOW())`
+    ));
+  } catch (e) {
+    console.warn("[Credits] Failed to log transaction:", e);
+  }
+
+  console.log(`[Credits] User ${userId}: +${amount} credits for ${action} (balance: ${newBalance})`);
+  return newBalance;
+}
+
+/**
+ * Get user's current credit balance.
+ */
+export async function getCreditBalance(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const [user] = await db.select({ creditBalance: users.creditBalance })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return (user?.creditBalance as number) || 0;
+}
+
+// ─── Project Samples ───
+export async function createProjectSample(data: InsertProjectSample): Promise<ProjectSample> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(projectSamples).values(data);
+  const id = result[0].insertId;
+  return (await db.select().from(projectSamples).where(eq(projectSamples.id, id)))[0];
+}
+
+export async function getPublishedProjectSamples(): Promise<ProjectSample[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(projectSamples)
+    .where(eq(projectSamples.isPublished, true))
+    .orderBy(asc(projectSamples.displayOrder), desc(projectSamples.createdAt));
+}
+
+export async function getAllProjectSamples(): Promise<ProjectSample[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(projectSamples)
+    .orderBy(asc(projectSamples.displayOrder), desc(projectSamples.createdAt));
+}
+
+export async function updateProjectSample(id: number, data: Partial<InsertProjectSample>): Promise<ProjectSample> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(projectSamples).set(data).where(eq(projectSamples.id, id));
+  return (await db.select().from(projectSamples).where(eq(projectSamples.id, id)))[0];
+}
+
+export async function deleteProjectSample(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(projectSamples).where(eq(projectSamples.id, id));
+}
+
+// ─── User Social Platform Credentials ────────────────────────────────────────
+import { userSocialCredentials, InsertUserSocialCredential, UserSocialCredential } from "../drizzle/schema";
+
+export async function getUserSocialCredentials(userId: number): Promise<UserSocialCredential[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userSocialCredentials)
+    .where(eq(userSocialCredentials.userId, userId))
+    .orderBy(asc(userSocialCredentials.platform));
+}
+
+export async function getUserSocialCredentialByPlatform(userId: number, platform: string): Promise<UserSocialCredential | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(userSocialCredentials)
+    .where(and(eq(userSocialCredentials.userId, userId), eq(userSocialCredentials.platform, platform)));
+  return rows[0];
+}
+
+export async function upsertUserSocialCredential(userId: number, platform: string, data: {
+  displayName?: string;
+  credentials: string;
+  isActive?: boolean;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await getUserSocialCredentialByPlatform(userId, platform);
+  if (existing) {
+    await db.update(userSocialCredentials)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(userSocialCredentials.userId, userId), eq(userSocialCredentials.platform, platform)));
+  } else {
+    await db.insert(userSocialCredentials).values({
+      userId,
+      platform,
+      displayName: data.displayName,
+      credentials: data.credentials,
+      isActive: data.isActive ?? true,
+    });
+  }
+}
+
+export async function updateSocialCredentialTestResult(userId: number, platform: string, success: boolean, error?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(userSocialCredentials)
+    .set({
+      lastTestedAt: new Date(),
+      lastError: success ? null : (error || "Connection failed"),
+      isActive: success,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(userSocialCredentials.userId, userId), eq(userSocialCredentials.platform, platform)));
+}
+
+export async function updateSocialCredentialPublished(userId: number, platform: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(userSocialCredentials)
+    .set({ lastPublishedAt: new Date(), lastError: null, updatedAt: new Date() })
+    .where(and(eq(userSocialCredentials.userId, userId), eq(userSocialCredentials.platform, platform)));
+}
+
+export async function deleteUserSocialCredential(userId: number, platform: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(userSocialCredentials)
+    .where(and(eq(userSocialCredentials.userId, userId), eq(userSocialCredentials.platform, platform)));
+}
+
+// ─── Beta Tier Management ───
+export async function assignBetaTier(userId: number, expiresAt: Date): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Use 'industry' tier for full access (beta ENUM value may not exist in live DB yet)
+  // Try with betaExpiresAt first; fall back to tier-only if column not yet migrated
+  try {
+    await db.execute(sql`UPDATE users SET subscriptionTier = 'industry', updatedAt = NOW() WHERE id = ${userId}`);
+  } catch (err) {
+    throw new Error(`Failed to assign beta tier: ${err}`);
+  }
+}
+
+export async function revokeBetaTier(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users)
+    .set({ subscriptionTier: "free" as any, betaExpiresAt: null, updatedAt: new Date() } as any)
+    .where(eq(users.id, userId));
+}
+
+// ─── Promo Codes ───
+export async function validatePromoCode(code: string): Promise<{ valid: boolean; discountPercent?: number; message?: string }> {
+  const db = await getDb();
+  if (!db) return { valid: false, message: "Database unavailable" };
+  try {
+    const rows = await db.execute(sql`SELECT * FROM promo_codes WHERE code = ${code.toUpperCase()} LIMIT 1`);
+    const promo = (rows[0] as any)?.[0];
+    if (!promo) return { valid: false, message: "Invalid promo code" };
+    if (!promo.isActive) return { valid: false, message: "This promo code has expired" };
+    if (promo.usedCount >= promo.maxUses) return { valid: false, message: "This promo code has already been used" };
+    return { valid: true, discountPercent: promo.discountPercent };
+  } catch {
+    return { valid: false, message: "Could not validate code" };
+  }
+}
+
+export async function applyPromoCodeToUser(userId: number, code: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.execute(sql`UPDATE promo_codes SET usedCount = usedCount + 1 WHERE code = ${code.toUpperCase()} AND usedCount < maxUses AND isActive = TRUE`);
+    await db.execute(sql`UPDATE users SET appliedPromoCode = ${code.toUpperCase()}, promoDiscountUsed = FALSE WHERE id = ${userId}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function markPromoDiscountUsed(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.execute(sql`UPDATE users SET promoDiscountUsed = TRUE WHERE id = ${userId}`);
+}
+
+export async function getUserPromoStatus(userId: number): Promise<{ appliedPromoCode: string | null; promoDiscountUsed: boolean }> {
+  const db = await getDb();
+  if (!db) return { appliedPromoCode: null, promoDiscountUsed: false };
+  try {
+    const rows = await db.execute(sql`SELECT appliedPromoCode, promoDiscountUsed FROM users WHERE id = ${userId} LIMIT 1`);
+    const row = (rows[0] as any)?.[0];
+    return { appliedPromoCode: row?.appliedPromoCode || null, promoDiscountUsed: !!row?.promoDiscountUsed };
+  } catch {
+    return { appliedPromoCode: null, promoDiscountUsed: false };
+  }
+}
+
+export async function seedPromoCodes(codes: Array<{ code: string; description: string; maxUses?: number }>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  for (const c of codes) {
+    try {
+      await db.execute(sql`INSERT IGNORE INTO promo_codes (code, discountPercent, maxUses, description) VALUES (${c.code.toUpperCase()}, 50, ${c.maxUses ?? 1}, ${c.description})`);
+    } catch { /* already exists */ }
+  }
+}
+
+// ─── Credit Transaction History ─────────────────────────────────────────────
+export async function getCreditHistory(
+  userId: number,
+  limit: number = 50,
+  offset: number = 0
+): Promise<{ transactions: any[]; total: number }> {
+  const db = await getDb();
+  if (!db) return { transactions: [], total: 0 };
+  try {
+    const rows = await db.execute(
+      sql`SELECT id, amount, action, description, balanceAfter, createdAt
+          FROM credit_transactions
+          WHERE userId = ${userId}
+          ORDER BY createdAt DESC
+          LIMIT ${limit} OFFSET ${offset}`
+    );
+    const countRows = await db.execute(
+      sql`SELECT COUNT(*) as total FROM credit_transactions WHERE userId = ${userId}`
+    );
+    const total = Number((countRows[0] as any)?.[0]?.total || 0);
+    const transactions = (Array.isArray(rows[0]) ? rows[0] : []) as any[];
+    return { transactions, total };
+  } catch {
+    return { transactions: [], total: 0 };
+  }
+}
+
+// ─── Temporary Account Expiry ────────────────────────────────────────────────
+/**
+ * If the user has a temporary tester account (accountExpiresAt IS NULL),
+ * set accountExpiresAt to NOW() + 48 hours on their very first login.
+ * Subsequent logins leave the expiry unchanged so the clock never resets.
+ *
+ * Detection: tester accounts are identified by openId starting with
+ * "email_tester" — matching accounts seeded via seed-tester.mjs.
+ */
+export async function setFirstLoginExpiry(userId: number, openId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  // Only applies to tester-seeded accounts
+  if (!openId.startsWith("email_tester")) return;
+  try {
+    // Only set if not already set (first login only)
+    await db.execute(
+      sql`UPDATE users
+             SET accountExpiresAt = DATE_ADD(NOW(), INTERVAL 48 HOUR),
+                 updatedAt        = NOW()
+           WHERE id               = ${userId}
+             AND accountExpiresAt IS NULL`
+    );
+  } catch (err) {
+    console.warn("[DB] setFirstLoginExpiry failed (non-critical):", err);
+  }
+}

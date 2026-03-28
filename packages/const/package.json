@@ -1,0 +1,20 @@
+{
+  "name": "@virelle/const",
+  "version": "1.0.0",
+  "description": "Shared constants, subscription tiers, and feature registry for Virelle Studios",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./feature-registry": "./src/feature-registry.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@virelle/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

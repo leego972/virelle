@@ -1,0 +1,2101 @@
+import { trpc } from "@/lib/trpc";
+import DirectorChat from "@/components/DirectorChat";
+import MediaPlayer from "@/components/MediaPlayer";
+import ShareButton from "@/components/ShareButton";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ArrowLeft,
+  Film,
+  Zap,
+  Layers,
+  Users,
+  Plus,
+  Upload,
+  Loader2,
+  Play,
+  Pause,
+  Clapperboard,
+  Image as ImageIcon,
+  Sparkles,
+  X,
+  User,
+  FileText,
+  Music,
+  Volume2,
+  Trash2,
+  Wand2,
+  Download,
+  Settings,
+  Monitor,
+  Grid3X3,
+  Award,
+  ListOrdered,
+  ShieldCheck,
+  Palette,
+  Copy,
+  MapPin,
+  Languages,
+  BookOpen,
+  MessageSquare,
+  DollarSign,
+  UserPlus,
+  Layers2,
+  Sparkle,
+  VideoIcon,
+  Users2,
+  Scissors,
+  Tv,
+  Megaphone,
+  Pencil,
+  StopCircle,
+} from "lucide-react";
+import { useLocation, useParams } from "wouter";
+import { useState, useRef, useCallback, useMemo } from "react";
+import { toast } from "sonner";
+import {
+  RATING_OPTIONS,
+  GENRE_OPTIONS,
+  ACT_STRUCTURE_OPTIONS,
+  ACT_STRUCTURE_LABELS,
+  TONE_OPTIONS,
+  TARGET_AUDIENCE_OPTIONS,
+} from "@shared/types";
+
+const MOOD_OPTIONS = [
+  "Epic", "Romantic", "Tense", "Upbeat", "Melancholic", "Mysterious",
+  "Triumphant", "Peaceful", "Dark", "Playful", "Nostalgic", "Heroic",
+];
+
+const GENRE_MUSIC_OPTIONS = [
+  "Orchestral", "Electronic", "Ambient", "Rock", "Jazz", "Classical",
+  "Hip-Hop", "Folk", "World", "Cinematic Score", "Pop", "Blues",
+];
+
+export default function ProjectDetail() {
+  const { id } = useParams<{ id: string }>();
+  const projectId = parseInt(id || "0");
+  const [, setLocation] = useLocation();
+  const [charDialogOpen, setCharDialogOpen] = useState(false);
+  const [aiCharDialogOpen, setAiCharDialogOpen] = useState(false);
+  const [trailerDialogOpen, setTrailerDialogOpen] = useState(false);
+  const [soundtrackDialogOpen, setSoundtrackDialogOpen] = useState(false);
+  const [charForm, setCharForm] = useState({
+    name: "", description: "", photoUrl: "",
+    age: "", gender: "", ethnicity: "", build: "", hairColor: "", role: "",
+  });
+  const [aiCharForm, setAiCharForm] = useState({
+    name: "",
+    ageRange: "",
+    gender: "",
+    ethnicity: "",
+    skinTone: "",
+    build: "",
+    height: "",
+    hairColor: "",
+    hairStyle: "",
+    eyeColor: "",
+    facialFeatures: "",
+    facialHair: "",
+    distinguishingMarks: "",
+    clothingStyle: "",
+    expression: "",
+    additionalNotes: "",
+  });
+  const [soundtrackForm, setSoundtrackForm] = useState({
+    title: "", artist: "", genre: "", mood: "", notes: "",
+    volume: 0.7, fadeIn: 0, fadeOut: 0, loop: 0,
+  });
+  const [uploading, setUploading] = useState(false);
+  const [audioUploading, setAudioUploading] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [editingDuration, setEditingDuration] = useState(false);
+  const [durationInput, setDurationInput] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
+  const [descForm, setDescForm] = useState({ description: "", plotSummary: "" });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLInputElement>(null);
+  const [videoPreviewSceneId, setVideoPreviewSceneId] = useState<number | null>(null);
+
+  const { data: project, isLoading } = trpc.project.get.useQuery({ id: projectId });
+  const { data: scenes } = trpc.scene.listByProject.useQuery({ projectId });
+  const { data: characters } = trpc.character.listByProject.useQuery({ projectId });
+  const { data: jobs } = trpc.generation.listJobs.useQuery({ projectId });
+  const { data: soundtracks } = trpc.soundtrack.listByProject.useQuery({ projectId });
+  const utils = trpc.useUtils();
+
+  // Build playlist for MediaPlayer from all scenes with video
+  const scenePlaylist = useMemo(() => {
+    if (!scenes) return [];
+    return scenes
+      .filter((s: any) => (s as any).videoUrl)
+      .map((s: any, idx: number) => ({
+        id: s.id,
+        title: s.title || `Scene ${idx + 1}`,
+        description: s.description || null,
+        type: "scene" as const,
+        fileUrl: (s as any).videoUrl || null,
+        thumbnailUrl: s.thumbnailUrl || null,
+        duration: s.duration || null,
+        fileSize: null,
+        mimeType: "video/mp4",
+        movieTitle: project?.title || null,
+        sceneNumber: idx + 1,
+      }));
+  }, [scenes, project]);
+
+  const activeVideoMovie = scenePlaylist.find((m) => m.id === videoPreviewSceneId) || null;
+
+  const uploadMutation = trpc.upload.image.useMutation();
+  const createCharMutation = trpc.character.create.useMutation({
+    onSuccess: () => {
+      utils.character.listByProject.invalidate({ projectId });
+      toast.success("Character added");
+      setCharDialogOpen(false);
+      setCharForm({ name: "", description: "", photoUrl: "", age: "", gender: "", ethnicity: "", build: "", hairColor: "", role: "" });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const aiCharMutation = trpc.character.aiGenerate.useMutation({
+    onSuccess: () => {
+      utils.character.listByProject.invalidate({ projectId });
+      utils.character.listLibrary.invalidate();
+      toast.success("AI character generated and saved");
+      setAiCharDialogOpen(false);
+      setAiCharForm({ name: "", ageRange: "", gender: "", ethnicity: "", skinTone: "", build: "", height: "", hairColor: "", hairStyle: "", eyeColor: "", facialFeatures: "", facialHair: "", distinguishingMarks: "", clothingStyle: "", expression: "", additionalNotes: "" });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteCharMutation = trpc.character.delete.useMutation({
+    onSuccess: () => {
+      utils.character.listByProject.invalidate({ projectId });
+      toast.success("Character removed");
+    },
+  });
+
+  const createSoundtrackMutation = trpc.soundtrack.create.useMutation({
+    onSuccess: () => {
+      utils.soundtrack.listByProject.invalidate({ projectId });
+      toast.success("Soundtrack added");
+      setSoundtrackDialogOpen(false);
+      setSoundtrackForm({ title: "", artist: "", genre: "", mood: "", notes: "", volume: 0.7, fadeIn: 0, fadeOut: 0, loop: 0 });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteSoundtrackMutation = trpc.soundtrack.delete.useMutation({
+    onSuccess: () => {
+      utils.soundtrack.listByProject.invalidate({ projectId });
+      toast.success("Soundtrack removed");
+    },
+  });
+
+  const uploadAudioMutation = trpc.soundtrack.uploadAudio.useMutation();
+
+  const quickGenMutation = trpc.generation.quickGenerate.useMutation({
+    onSuccess: (result) => {
+      utils.project.get.invalidate({ id: projectId });
+      utils.scene.listByProject.invalidate({ projectId });
+      utils.generation.listJobs.invalidate({ projectId });
+      toast.success(`Generated ${result.scenesCreated} scenes`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const cancelGenerationMutation = trpc.generation.cancelGeneration.useMutation({
+    onSuccess: (result) => {
+      utils.project.get.invalidate({ id: projectId });
+      utils.generation.listJobs.invalidate({ projectId });
+      toast.success(`Generation cancelled. ${result.cancelledJobs > 0 ? `${result.cancelledJobs} job(s) stopped.` : ""}`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const duplicateMutation = trpc.projectDuplicate.duplicate.useMutation({
+    onSuccess: (newProject: any) => {
+      utils.project.list.invalidate();
+      toast.success("Project duplicated");
+      setLocation(`/projects/${newProject.id}`);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const trailerMutation = trpc.generation.generateTrailer.useMutation({
+    onSuccess: () => {
+      utils.generation.listJobs.invalidate({ projectId });
+      setTrailerDialogOpen(true);
+      toast.success("Trailer generated");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateMutation = trpc.project.update.useMutation({
+    onSuccess: () => {
+      utils.project.get.invalidate({ id: projectId });
+      toast.success("Project updated");
+    },
+  });
+
+  const exportMutation = trpc.movie.exportFromProject.useMutation({
+    onSuccess: (result, variables) => {
+      utils.movie.list.invalidate();
+      utils.movie.listGrouped.invalidate();
+      const typeLabel = variables.exportType === "film" ? "Full film" : variables.exportType === "scenes" ? `${result.exported} scene(s)` : "Trailer";
+      toast.success(`${typeLabel} exported to My Movies`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("File must be under 10MB"); return; }
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(",")[1];
+        const result = await uploadMutation.mutateAsync({ base64, filename: file.name, contentType: file.type });
+        setCharForm((prev) => ({ ...prev, photoUrl: result.url }));
+        setUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch { toast.error("Upload failed"); setUploading(false); }
+  }, [uploadMutation]);
+
+  const handleAudioUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 16 * 1024 * 1024) { toast.error("Audio must be under 16MB"); return; }
+    setAudioUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(",")[1];
+        const result = await uploadAudioMutation.mutateAsync({ base64, filename: file.name, contentType: file.type });
+        setSoundtrackForm((prev) => ({ ...prev, title: prev.title || file.name.replace(/\.[^.]+$/, "") }));
+        // Store the URL temporarily for submission
+        (window as any).__pendingAudioUrl = result.url;
+        (window as any).__pendingAudioKey = result.key;
+        setAudioUploading(false);
+        toast.success("Audio uploaded");
+      };
+      reader.readAsDataURL(file);
+    } catch { toast.error("Upload failed"); setAudioUploading(false); }
+  }, [uploadAudioMutation]);
+
+  if (isLoading) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="max-w-5xl mx-auto flex flex-col items-center py-20">
+        <Film className="h-10 w-10 text-muted-foreground/40 mb-3" />
+        <p className="text-sm text-muted-foreground">Project not found</p>
+        <Button variant="ghost" size="sm" className="mt-4" onClick={() => setLocation("/projects")}>
+          Back to projects
+        </Button>
+      </div>
+    );
+  }
+
+  const latestTrailerJob = jobs?.find(j => (j.metadata as any)?.trailerType === "cinematic" && j.status === "completed");
+  const trailerData = latestTrailerJob?.metadata as any;
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <Button variant="ghost" size="sm" className="h-10 w-10 sm:h-8 sm:w-8 p-0 shrink-0" onClick={() => setLocation("/projects")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight truncate">{project.title}</h1>
+            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+              {project.mode === "quick" ? <Zap className="h-3 w-3" /> : <Layers className="h-3 w-3" />}
+              <span className="capitalize">{project.mode}</span>
+              {project.rating && <><span>·</span><span>{project.rating}</span></>}
+              {project.genre && <><span>·</span><span>{project.genre}</span></>}
+              {editingDuration ? (
+                <span className="flex items-center gap-1">
+                  <span>·</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={180}
+                    className="w-16 h-5 text-xs bg-background border border-primary rounded px-1 text-foreground"
+                    value={durationInput}
+                    autoFocus
+                    onChange={e => setDurationInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        const val = parseInt(durationInput);
+                        if (val >= 1 && val <= 180) {
+                          updateMutation.mutate({ id: projectId, duration: val });
+                          setEditingDuration(false);
+                        }
+                      }
+                      if (e.key === "Escape") setEditingDuration(false);
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(durationInput);
+                      if (val >= 1 && val <= 180) {
+                        updateMutation.mutate({ id: projectId, duration: val });
+                      }
+                      setEditingDuration(false);
+                    }}
+                  />
+                  <span className="text-[10px]">min</span>
+                </span>
+              ) : (
+                <>
+                  {project.duration && (
+                    <span className="cursor-pointer hover:text-primary transition-colors" title="Click to edit duration" onClick={() => { setDurationInput(String(project.duration)); setEditingDuration(true); }}>
+                      <span>·</span> {project.duration < 2 ? `${Math.round(project.duration * 60)}s` : `${project.duration} min`} ✎
+                    </span>
+                  )}
+                  {!project.duration && scenes?.length ? (
+                    <span className="cursor-pointer hover:text-primary transition-colors" title="Click to set duration" onClick={() => { setDurationInput("5"); setEditingDuration(true); }}>
+                      <span>·</span> {(() => { const totalSec = (scenes || []).reduce((sum: number, s: any) => sum + (s.duration || 30), 0); return totalSec < 120 ? `${totalSec}s` : `${Math.round(totalSec / 60)} min`; })()} ✎
+                    </span>
+                  ) : !project.duration ? (
+                    <span className="cursor-pointer hover:text-primary transition-colors text-muted-foreground" title="Click to set duration" onClick={() => { setDurationInput("5"); setEditingDuration(true); }}>
+                      <span>·</span> Set duration ✎
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-start sm:justify-end max-w-full overflow-x-auto">
+          <ShareButton title={project.title} description={project.plotSummary || project.description || undefined} compact />
+          <Button size="sm" variant="outline" onClick={() => setLocation(`/projects/${project.id}/storyboard`)}>
+            <Grid3X3 className="h-4 w-4 mr-1" />
+            Storyboard
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setLocation(`/projects/${project.id}/script/new`)}>
+            <FileText className="h-4 w-4 mr-1" />
+            Script
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setLocation(`/projects/${project.id}/scenes`)}>
+            <Layers className="h-4 w-4 mr-1" />
+            Scene Editor
+          </Button>
+          {project.mode === "quick" && project.status === "draft" && (
+            <Button
+              size="sm"
+              onClick={() => quickGenMutation.mutate({ projectId: project.id })}
+              disabled={quickGenMutation.isPending}
+            >
+              {quickGenMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Generating...</>
+              ) : (
+                <><Sparkles className="h-4 w-4 mr-1" />Generate Film</>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Generation Progress */}
+      {(project.status === "generating" || quickGenMutation.isPending) && (
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm font-medium">Generating your film...</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-red-500/40 text-red-400 hover:bg-red-500/10 hover:border-red-500 hover:text-red-300 gap-1.5 shrink-0"
+                onClick={() => {
+                  if (confirm("Stop generation? Scenes created so far will be kept, but the AI will stop generating new ones.")) {
+                    cancelGenerationMutation.mutate({ projectId });
+                  }
+                }}
+                disabled={cancelGenerationMutation.isPending}
+              >
+                {cancelGenerationMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <StopCircle className="h-3 w-3" />
+                )}
+                Stop Generating
+              </Button>
+            </div>
+            <Progress value={project.progress || 10} className="h-1.5" />
+            <p className="text-xs text-muted-foreground mt-2">
+              AI is creating scenes based on your plot and characters. Scenes generated so far will be kept if you stop.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="bg-card/50 flex-nowrap sm:flex-wrap h-auto gap-1 p-1 overflow-x-auto w-full justify-start">
+          {/* Pipeline order: Overview → Story → Characters → Scenes → Soundtrack → Trailer → Export → Tools */}
+          <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+          <TabsTrigger value="story" className="text-xs">
+            <BookOpen className="h-3 w-3 mr-1" />Story
+          </TabsTrigger>
+          <TabsTrigger value="characters" className="text-xs">
+            Characters {characters?.length ? `(${characters.length})` : ""}
+          </TabsTrigger>
+          <TabsTrigger value="scenes" className="text-xs">
+            Scenes {scenes?.length ? `(${scenes.length})` : ""}
+          </TabsTrigger>
+          <TabsTrigger value="soundtrack" className="text-xs">
+            <Music className="h-3 w-3 mr-1" />Soundtrack {soundtracks?.length ? `(${soundtracks.length})` : ""}
+          </TabsTrigger>
+          <TabsTrigger value="trailer" className="text-xs">Trailer</TabsTrigger>
+          <TabsTrigger value="export" className="text-xs">
+            <Download className="h-3 w-3 mr-1" />Export
+          </TabsTrigger>
+          <TabsTrigger value="tools" className="text-xs">
+            <Settings className="h-3 w-3 mr-1" />Tools
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card className="bg-card/50">
+              <CardContent className="p-4">
+                <div className="relative aspect-video rounded-md overflow-hidden bg-muted group cursor-pointer"
+                  onClick={() => {
+                    if (scenePlaylist.length > 0) setVideoPreviewSceneId(scenePlaylist[0].id);
+                  }}
+                >
+                  {project.thumbnailUrl ? (
+                    <img src={project.thumbnailUrl} alt={project.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-muted/50">
+                      <Film className="h-10 w-10 text-muted-foreground/30" />
+                    </div>
+                  )}
+                  {/* Play button overlay */}
+                  {scenePlaylist.length > 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                      <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30">
+                        <Play className="h-7 w-7 text-white fill-white ml-0.5" />
+                      </div>
+                      <span className="absolute bottom-2 right-2 text-[10px] text-white/80 bg-black/50 rounded px-1.5 py-0.5">
+                        {scenePlaylist.length} {scenePlaylist.length === 1 ? 'scene' : 'scenes'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-xs capitalize">{project.status}</Badge>
+                  <Badge variant="outline" className="text-xs">{project.resolution}</Badge>
+                  <Badge variant="outline" className="text-xs capitalize">{project.quality}</Badge>
+                  {scenePlaylist.length > 0 && (
+                    <Badge className="text-xs bg-amber-500/20 text-amber-400 border-amber-500/30 border">
+                      <VideoIcon className="h-3 w-3 mr-1" />{scenePlaylist.length} video{scenePlaylist.length !== 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-card/50 lg:col-span-2">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-medium">Project Details</CardTitle>
+                {!editingDescription ? (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => {
+                    setDescForm({ description: project.description || "", plotSummary: project.plotSummary || "" });
+                    setEditingDescription(true);
+                  }}>
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingDescription(false)}>Cancel</Button>
+                    <Button size="sm" className="h-7 text-xs" onClick={() => {
+                      updateMutation.mutate({ id: projectId, description: descForm.description || undefined, plotSummary: descForm.plotSummary || undefined });
+                      setEditingDescription(false);
+                    }}>Save</Button>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {editingDescription ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Description</Label>
+                      <Textarea
+                        placeholder="Brief project description..."
+                        value={descForm.description}
+                        onChange={e => setDescForm(f => ({ ...f, description: e.target.value }))}
+                        className="min-h-[60px] text-sm bg-background/50 resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Plot Summary</Label>
+                      <Textarea
+                        placeholder="Full plot summary..."
+                        value={descForm.plotSummary}
+                        onChange={e => setDescForm(f => ({ ...f, plotSummary: e.target.value }))}
+                        className="min-h-[100px] text-sm bg-background/50 resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}
+                    {project.plotSummary && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Plot Summary</Label>
+                        <p className="text-sm mt-1 leading-relaxed">{project.plotSummary}</p>
+                      </div>
+                    )}
+                    {!project.plotSummary && !project.description && (
+                      <p className="text-sm text-muted-foreground/60 cursor-pointer hover:text-muted-foreground" onClick={() => {
+                        setDescForm({ description: "", plotSummary: "" });
+                        setEditingDescription(true);
+                      }}>Click to add description...</p>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className="bg-card/50 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setActiveTab("scenes")}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-semibold">{scenes?.length || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Scenes</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-card/50 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setActiveTab("characters")}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-semibold">{characters?.length || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Characters</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-card/50 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setActiveTab("soundtrack")}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-semibold">{soundtracks?.length || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Tracks</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-card/50 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setActiveTab("export")}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-semibold">{jobs?.filter(j => j.status === "completed").length || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Generations</p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Characters Tab */}
+        <TabsContent value="characters" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">Characters in this project</p>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setAiCharDialogOpen(true)}>
+                <Wand2 className="h-4 w-4 mr-1" />
+                AI Generate
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCharDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Upload Photo
+              </Button>
+            </div>
+          </div>
+          {!characters?.length ? (
+            <Card className="bg-card/50 border-dashed">
+              <CardContent className="p-10 flex flex-col items-center text-center">
+                <Users className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground mb-1">No characters added yet</p>
+                <p className="text-xs text-muted-foreground/60 mb-4">Upload a photo or generate an AI character</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setAiCharDialogOpen(true)}>
+                    <Wand2 className="h-4 w-4 mr-1" />AI Generate
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setCharDialogOpen(true)}>
+                    <Upload className="h-4 w-4 mr-1" />Upload Photo
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {characters.map((char) => {
+                const attrs = (char.attributes || {}) as any;
+                return (
+                  <Card key={char.id} className="bg-card/50 group relative">
+                    <CardContent className="p-3">
+                      {char.photoUrl ? (
+                        <div className="aspect-square rounded-md overflow-hidden mb-2 bg-muted">
+                          <img src={char.photoUrl} alt={char.name} className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="aspect-square rounded-md mb-2 bg-muted/50 flex items-center justify-center">
+                          <User className="h-8 w-8 text-muted-foreground/30" />
+                        </div>
+                      )}
+                      <p className="text-sm font-medium truncate">{char.name}</p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {attrs.aiGenerated && <Badge variant="secondary" className="text-[10px] px-1 py-0">AI</Badge>}
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[attrs.role, attrs.age || attrs.ageRange, attrs.gender].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      <button
+                        className="absolute top-2 right-2 h-6 w-6 bg-destructive/80 rounded-full items-center justify-center hidden group-hover:flex"
+                        onClick={() => deleteCharMutation.mutate({ id: char.id })}
+                      >
+                        <X className="h-3 w-3 text-white" />
+                      </button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Scenes Tab */}
+        <TabsContent value="scenes" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {scenes?.length ? `${scenes.length} scenes` : "No scenes yet"}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => setLocation(`/projects/${project.id}/scenes`)}>
+              <Layers className="h-4 w-4 mr-1" />
+              Open Scene Editor
+            </Button>
+          </div>
+          {scenes?.length ? (
+            <div className="space-y-2">
+              {scenes.map((scene, idx) => (
+                <Card key={scene.id} className="bg-card/50 group">
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div className="relative h-14 w-20 shrink-0">
+                      {scene.thumbnailUrl ? (
+                        <div className="h-full w-full rounded overflow-hidden bg-muted">
+                          <img src={scene.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="h-full w-full rounded bg-muted/50 flex items-center justify-center">
+                          <ImageIcon className="h-5 w-5 text-muted-foreground/30" />
+                        </div>
+                      )}
+                      {(scene as any).videoUrl && (
+                        <button
+                          className="absolute inset-0 flex items-center justify-center bg-black/40 rounded transition-colors active:bg-black/60"
+                          onClick={() => setVideoPreviewSceneId(scene.id)}
+                        >
+                          <Play className="h-6 w-6 text-white fill-white" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">#{idx + 1}</span>
+                        <p className="text-sm font-medium truncate">{scene.title || "Untitled Scene"}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {[scene.timeOfDay, scene.locationType, scene.mood].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {(scene as any).videoUrl && (
+                        <button
+                          className="h-7 w-7 rounded-md flex items-center justify-center text-blue-400 hover:bg-blue-500/10 active:bg-blue-500/20 transition-colors"
+                          title="Download video"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const a = document.createElement("a");
+                            a.href = (scene as any).videoUrl;
+                            a.download = scene.title || `scene_${idx + 1}`;
+                            a.target = "_blank";
+                            a.rel = "noopener noreferrer";
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                          }}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {(scene as any).videoUrl && (
+                        <Badge className="text-[10px] h-5 bg-amber-500/20 text-amber-400 border-amber-500/30 border">
+                          <VideoIcon className="h-2.5 w-2.5 mr-0.5" />Video
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-xs capitalize">{scene.status}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="bg-card/50 border-dashed">
+              <CardContent className="p-10 flex flex-col items-center text-center">
+                <Clapperboard className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground mb-3">
+                  {project.mode === "quick" ? "Generate your film to create scenes automatically" : "Open the scene editor to start crafting scenes"}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Soundtrack Tab */}
+        <TabsContent value="soundtrack" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Background music and soundtrack</p>
+              <p className="text-xs text-muted-foreground/60 mt-0.5">Add tracks for the overall film or assign to specific scenes</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setSoundtrackDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add Track
+            </Button>
+          </div>
+          {!soundtracks?.length ? (
+            <Card className="bg-card/50 border-dashed">
+              <CardContent className="p-10 flex flex-col items-center text-center">
+                <Music className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground mb-3">No soundtracks added yet</p>
+                <Button size="sm" variant="outline" onClick={() => setSoundtrackDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" />Add Track
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {soundtracks.map((track) => (
+                <Card key={track.id} className="bg-card/50 group">
+                  <CardContent className="p-4 flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                      <Music className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{track.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {[track.artist, track.genre, track.mood].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Volume2 className="h-3 w-3" />
+                        {Math.round((track.volume || 0.7) * 100)}%
+                      </div>
+                      {track.fileUrl && (
+                        <audio controls className="h-8 w-36" src={track.fileUrl} preload="none" />
+                      )}
+                      <button
+                        className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        onClick={() => deleteSoundtrackMutation.mutate({ id: track.id })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Story Tab */}
+        <TabsContent value="story" className="space-y-4">
+          <StoryEditor project={project} updateMutation={updateMutation} />
+        </TabsContent>
+
+        {/* Trailer Tab */}
+        <TabsContent value="trailer" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">AI-generated movie trailer</p>
+              <p className="text-xs text-muted-foreground/60 mt-0.5">All trailers are G-rated and spoiler-free</p>
+            </div>
+            <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setLocation(`/projects/${project.id}/trailer-studio`)}>
+              <Film className="h-4 w-4 mr-1" />
+              Trailer Studio
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => trailerMutation.mutate({ projectId: project.id })}
+              disabled={trailerMutation.isPending || !scenes?.length}
+            >
+              {trailerMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Generating...</>
+              ) : (
+                <><Sparkles className="h-4 w-4 mr-1" />Generate Trailer</>
+              )}
+            </Button>
+            </div>
+          </div>
+          {!scenes?.length && (
+            <Card className="bg-card/50 border-dashed">
+              <CardContent className="p-10 flex flex-col items-center text-center">
+                <Play className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">Create scenes first before generating a trailer</p>
+              </CardContent>
+            </Card>
+          )}
+          {trailerData && (
+            <Card className="bg-card/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">{trailerData.trailerTitle || "Movie Trailer"}</CardTitle>
+                {trailerData.tagline && <p className="text-xs text-muted-foreground italic">{trailerData.tagline}</p>}
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {trailerData.trailerImages?.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {trailerData.trailerImages.map((url: string, i: number) => (
+                      <div key={i} className="aspect-video rounded-md overflow-hidden bg-muted">
+                        <img src={url} alt={`Trailer shot ${i + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {trailerData.trailerScenes?.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    {trailerData.trailerScenes
+                      .sort((a: any, b: any) => a.trailerOrder - b.trailerOrder)
+                      .map((ts: any, i: number) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-xs text-primary font-medium mt-0.5 shrink-0">{i + 1}.</span>
+                          <p className="text-xs text-muted-foreground">{ts.trailerDescription}</p>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Export Tab */}
+        <TabsContent value="export" className="space-y-4">
+          <Card className="bg-card/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Export Settings
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Configure output format, resolution, and quality for your film</p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Format</Label>
+                  <Select defaultValue="mp4">
+                    <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mp4">MP4 (H.264)</SelectItem>
+                      <SelectItem value="mov">MOV (ProRes)</SelectItem>
+                      <SelectItem value="webm">WebM (VP9)</SelectItem>
+                      <SelectItem value="avi">AVI</SelectItem>
+                      <SelectItem value="mkv">MKV</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Monitor className="h-3 w-3" />Resolution
+                  </Label>
+                  <Select defaultValue={project.resolution || "1920x1080"}>
+                    <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1280x720">720p HD</SelectItem>
+                      <SelectItem value="1920x1080">1080p Full HD</SelectItem>
+                      <SelectItem value="2560x1440">1440p QHD</SelectItem>
+                      <SelectItem value="3840x2160">4K UHD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Settings className="h-3 w-3" />Quality
+                  </Label>
+                  <Select defaultValue={project.quality || "high"}>
+                    <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft (Fast)</SelectItem>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="ultra">Ultra (Cinema)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Frame Rate</Label>
+                  <Select defaultValue="24">
+                    <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24 fps (Cinema)</SelectItem>
+                      <SelectItem value="30">30 fps</SelectItem>
+                      <SelectItem value="60">60 fps (Smooth)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Aspect Ratio</Label>
+                  <Select defaultValue="16:9">
+                    <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="16:9">16:9 (Widescreen)</SelectItem>
+                      <SelectItem value="2.39:1">2.39:1 (Cinemascope)</SelectItem>
+                      <SelectItem value="1.85:1">1.85:1 (Academy Flat)</SelectItem>
+                      <SelectItem value="4:3">4:3 (Classic)</SelectItem>
+                      <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                      <SelectItem value="9:16">9:16 (Vertical)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <Label className="text-xs text-muted-foreground">Include in Export</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["Subtitles", "Soundtrack", "Credits Sequence", "Opening Titles", "Color Grading", "Sound Effects"].map((item) => (
+                    <label key={item} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" defaultChecked className="rounded border-border" />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button size="sm" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate({ projectId, exportType: "film" })}>
+                  <Download className="h-4 w-4 mr-1" />
+                  {exportMutation.isPending ? "Exporting..." : "Export Full Film"}
+                </Button>
+                <Button size="sm" variant="outline" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate({ projectId, exportType: "trailer" })}>
+                  <Film className="h-4 w-4 mr-1" />
+                  Export Trailer
+                </Button>
+                <Button size="sm" variant="outline" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate({ projectId, exportType: "scenes" })}>
+                  <Layers className="h-4 w-4 mr-1" />
+                  Export Scenes
+                </Button>
+                <p className="text-xs text-muted-foreground w-full mt-1">
+                  Exported items appear in your My Movies library, organized by movie title.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Export History */}
+          <Card className="bg-card/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Export History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {jobs?.filter(j => (j.metadata as any)?.exportType).length ? (
+                <div className="space-y-2">
+                  {jobs.filter(j => (j.metadata as any)?.exportType).map(job => (
+                    <div key={job.id} className="flex items-center justify-between p-3 rounded-md border">
+                      <div>
+                        <p className="text-sm font-medium">{(job.metadata as any)?.format || "MP4"} Export</p>
+                        <p className="text-xs text-muted-foreground">{new Date(job.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs capitalize">{job.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <Download className="h-8 w-8 text-muted-foreground/30 mb-2" />
+                  <p className="text-xs text-muted-foreground">No exports yet. Configure settings above and export your film.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tools Tab Content */}
+        <TabsContent value="tools" className="space-y-6">
+
+          {/* Pre-Production */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-border/40" />
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2">Pre-Production</span>
+              <div className="h-px flex-1 bg-border/40" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/mood-board`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Palette className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Mood Board</p>
+                  <p className="text-xs text-muted-foreground">Visual inspiration & creative direction</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/locations`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <MapPin className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Location Scout</p>
+                  <p className="text-xs text-muted-foreground">Find & manage filming locations</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/shot-list`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <ListOrdered className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Shot List</p>
+                  <p className="text-xs text-muted-foreground">AI-generated shot breakdown</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-amber-500/40 transition-all border-amber-500/20" onClick={() => setLocation(`/projects/${project.id}/ai-casting`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Users2 className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">AI Casting <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Pro</span></p>
+                  <p className="text-xs text-muted-foreground">AI-powered casting suggestions for your script</p>
+                </div>
+              </CardContent>
+            </Card>
+            </div>
+          </div>
+
+          {/* Production */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-border/40" />
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2">Production</span>
+              <div className="h-px flex-1 bg-border/40" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/continuity`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Continuity Check</p>
+                  <p className="text-xs text-muted-foreground">AI script supervision</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/dialogue`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Dialogue Editor</p>
+                  <p className="text-xs text-muted-foreground">Write and refine character dialogue</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-amber-500/40 transition-all border-amber-500/20" onClick={() => setLocation(`/projects/${project.id}/multi-shot`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Layers2 className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">Multi-Shot Sequencer <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Pro</span></p>
+                  <p className="text-xs text-muted-foreground">Build shot sequences with timeline editing</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-amber-500/40 transition-all border-amber-500/20" onClick={() => setLocation(`/projects/${project.id}/live-action-plate`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <VideoIcon className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">Live Action Plate <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Pro</span></p>
+                  <p className="text-xs text-muted-foreground">Blend AI scenes with real footage</p>
+                </div>
+              </CardContent>
+            </Card>
+            </div>
+          </div>
+
+          {/* Post-Production */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-border/40" />
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2">Post-Production</span>
+              <div className="h-px flex-1 bg-border/40" />
+            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Card className="cursor-pointer hover:ring-2 hover:ring-primary/60 transition-all border-primary/40 bg-primary/5" onClick={() => setLocation(`/projects/${project.id}/director-cut`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+                  <Scissors className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-primary">Director's Cut</p>
+                  <p className="text-xs text-muted-foreground">Timeline editor — trim, reorder &amp; retake scenes</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/color-grading`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Palette className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Color Grading</p>
+                  <p className="text-xs text-muted-foreground">Set cinematic look & presets</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/credits`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Award className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Credits Editor</p>
+                  <p className="text-xs text-muted-foreground">Opening & closing credits</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/subtitles`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Languages className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Subtitles & Translation</p>
+                  <p className="text-xs text-muted-foreground">130+ languages · AI generation & translation</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/sound-effects`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Volume2 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Film Post-Production</p>
+                  <p className="text-xs text-muted-foreground">ADR · Foley · Score · Mix · SFX library</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/visual-effects`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-5 w-5 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Visual Effects</p>
+                  <p className="text-xs text-muted-foreground">VFX library — explosions, weather, magic & more</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-amber-500/40 transition-all border-amber-500/20" onClick={() => setLocation(`/projects/${project.id}/nle-export`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Download className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">NLE Export <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Pro</span></p>
+                  <p className="text-xs text-muted-foreground">Export XML/EDL for Premiere, DaVinci, Final Cut</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-amber-500/40 transition-all border-amber-500/20" onClick={() => setLocation(`/projects/${project.id}/vfx-suite`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Sparkle className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">VFX Suite <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Pro</span></p>
+                  <p className="text-xs text-muted-foreground">Scene extension, object removal, style transfer</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+           </div>
+
+          {/* Marketing & Distribution */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-border/40" />
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2">Marketing & Distribution</span>
+              <div className="h-px flex-1 bg-border/40" />
+            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Card className="cursor-pointer hover:ring-2 hover:ring-blue-500/60 transition-all border-blue-500/40 bg-blue-500/5" onClick={() => setLocation(`/projects/${project.id}/trailer-studio`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+                  <Film className="h-5 w-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-blue-400">Trailer Studio</p>
+                  <p className="text-xs text-muted-foreground">Teaser, theatrical & TV spot trailers with beat editor</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-2 hover:ring-green-500/60 transition-all border-green-500/40 bg-green-500/5" onClick={() => setLocation(`/projects/${project.id}/tv-commercial`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-green-500/20 flex items-center justify-center shrink-0">
+                  <Tv className="h-5 w-5 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-green-400">TV Commercial Creator</p>
+                  <p className="text-xs text-muted-foreground">Broadcast, streaming & social ads with AI script</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/poster-maker`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Megaphone className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Ad & Poster Maker</p>
+                  <p className="text-xs text-muted-foreground">Movie posters, social cards & promotional art</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          </div>
+
+          {/* Project Management */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-border/40" />
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2">Project Management</span>
+              <div className="h-px flex-1 bg-border/40" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/budget`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <DollarSign className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Budget Estimator</p>
+                  <p className="text-xs text-muted-foreground">AI production budget breakdown</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => setLocation(`/projects/${project.id}/collaboration`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <UserPlus className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Collaboration</p>
+                  <p className="text-xs text-muted-foreground">Invite team members to collaborate</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => {
+              if (confirm('Duplicate this project? A copy will be created with all settings.')) {
+                duplicateMutation.mutate({ projectId: project.id });
+              }
+            }}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Copy className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Duplicate Project</p>
+                  <p className="text-xs text-muted-foreground">Clone as a new project</p>
+                </div>
+              </CardContent>
+            </Card>
+            </div>
+          </div>
+
+        </TabsContent>
+      </Tabs>
+
+      {/* Add Character (Photo Upload) Dialog */}
+      <Dialog open={charDialogOpen} onOpenChange={setCharDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">Add Character with Photo</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!charForm.name.trim()) { toast.error("Name is required"); return; }
+              createCharMutation.mutate({
+                projectId,
+                name: charForm.name.trim(),
+                description: charForm.description.trim() || undefined,
+                photoUrl: charForm.photoUrl || undefined,
+                attributes: {
+                  age: charForm.age || undefined,
+                  gender: charForm.gender || undefined,
+                  ethnicity: charForm.ethnicity || undefined,
+                  build: charForm.build || undefined,
+                  hairColor: charForm.hairColor || undefined,
+                  role: charForm.role || undefined,
+                },
+              });
+            }}
+            className="space-y-4 mt-2"
+          >
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Character Photo</Label>
+              <div className="flex items-center gap-4">
+                {charForm.photoUrl ? (
+                  <div className="relative h-20 w-20 rounded-md overflow-hidden bg-muted shrink-0">
+                    <img src={charForm.photoUrl} alt="" className="w-full h-full object-cover" />
+                    <button type="button" className="absolute top-1 right-1 h-5 w-5 bg-black/60 rounded-full flex items-center justify-center"
+                      onClick={() => setCharForm(p => ({ ...p, photoUrl: "" }))}>
+                      <X className="h-3 w-3 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="h-20 w-20 rounded-md border border-dashed flex items-center justify-center cursor-pointer hover:border-primary/40 transition-colors shrink-0"
+                    onClick={() => fileRef.current?.click()}>
+                    {uploading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <Upload className="h-5 w-5 text-muted-foreground" />}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">JPG, PNG up to 10MB</p>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Name <span className="text-destructive">*</span></Label>
+              <Input placeholder="Character name" value={charForm.name} onChange={e => setCharForm(p => ({ ...p, name: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Role in Story</Label>
+              <Select value={charForm.role} onValueChange={v => setCharForm(p => ({ ...p, role: v }))}>
+                <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select role" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="protagonist">Protagonist</SelectItem>
+                  <SelectItem value="antagonist">Antagonist</SelectItem>
+                  <SelectItem value="supporting">Supporting</SelectItem>
+                  <SelectItem value="minor">Minor</SelectItem>
+                  <SelectItem value="extra">Extra</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Age</Label>
+                <Input placeholder="e.g. 35" value={charForm.age} onChange={e => setCharForm(p => ({ ...p, age: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Gender</Label>
+                <Select value={charForm.gender} onValueChange={v => setCharForm(p => ({ ...p, gender: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="non-binary">Non-binary</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Ethnicity</Label>
+                <Input placeholder="e.g. Caucasian" value={charForm.ethnicity} onChange={e => setCharForm(p => ({ ...p, ethnicity: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Build</Label>
+                <Select value={charForm.build} onValueChange={v => setCharForm(p => ({ ...p, build: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="slim">Slim</SelectItem>
+                    <SelectItem value="average">Average</SelectItem>
+                    <SelectItem value="athletic">Athletic</SelectItem>
+                    <SelectItem value="muscular">Muscular</SelectItem>
+                    <SelectItem value="heavy">Heavy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Hair Color</Label>
+              <Input placeholder="e.g. Black, Blonde" value={charForm.hairColor} onChange={e => setCharForm(p => ({ ...p, hairColor: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Full Description</Label>
+              <Textarea placeholder="Personality, background, motivations, distinctive features, wardrobe style..." value={charForm.description} onChange={e => setCharForm(p => ({ ...p, description: e.target.value }))} className="min-h-[80px] text-sm bg-background/50 resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setCharDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" size="sm" disabled={createCharMutation.isPending}>
+                {createCharMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                Add Character
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Character Generator Dialog */}
+      <Dialog open={aiCharDialogOpen} onOpenChange={setAiCharDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <Wand2 className="h-4 w-4 text-primary" />
+              AI Character Generator
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Select physical features and AI will generate a Hollywood-quality photorealistic character portrait
+            </p>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!aiCharForm.name.trim()) { toast.error("Character name is required"); return; }
+              if (!aiCharForm.gender) { toast.error("Gender is required"); return; }
+              if (!aiCharForm.ageRange) { toast.error("Age range is required"); return; }
+              if (!aiCharForm.ethnicity) { toast.error("Ethnicity is required"); return; }
+              if (!aiCharForm.hairColor) { toast.error("Hair color is required"); return; }
+              if (!aiCharForm.hairStyle) { toast.error("Hair style is required"); return; }
+              if (!aiCharForm.eyeColor) { toast.error("Eye color is required"); return; }
+              aiCharMutation.mutate({
+                name: aiCharForm.name.trim(),
+                projectId: projectId,
+                features: {
+                  ageRange: aiCharForm.ageRange,
+                  gender: aiCharForm.gender,
+                  ethnicity: aiCharForm.ethnicity,
+                  skinTone: aiCharForm.skinTone || undefined,
+                  build: aiCharForm.build || undefined,
+                  height: aiCharForm.height || undefined,
+                  hairColor: aiCharForm.hairColor,
+                  hairStyle: aiCharForm.hairStyle,
+                  eyeColor: aiCharForm.eyeColor,
+                  facialFeatures: aiCharForm.facialFeatures || undefined,
+                  facialHair: aiCharForm.facialHair || undefined,
+                  distinguishingMarks: aiCharForm.distinguishingMarks || undefined,
+                  clothingStyle: aiCharForm.clothingStyle || undefined,
+                  expression: aiCharForm.expression || undefined,
+                  additionalNotes: aiCharForm.additionalNotes || undefined,
+                },
+              });
+            }}
+            className="space-y-4 mt-2"
+          >
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Character Name <span className="text-destructive">*</span></Label>
+              <Input placeholder="e.g. Detective Marcus Cole" value={aiCharForm.name} onChange={e => setAiCharForm(p => ({ ...p, name: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Gender <span className="text-destructive">*</span></Label>
+                <Select value={aiCharForm.gender} onValueChange={v => setAiCharForm(p => ({ ...p, gender: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="non-binary">Non-binary</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Age Range <span className="text-destructive">*</span></Label>
+                <Select value={aiCharForm.ageRange} onValueChange={v => setAiCharForm(p => ({ ...p, ageRange: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="teens">Teens (13-19)</SelectItem>
+                    <SelectItem value="20s">20s</SelectItem>
+                    <SelectItem value="30s">30s</SelectItem>
+                    <SelectItem value="40s">40s</SelectItem>
+                    <SelectItem value="50s">50s</SelectItem>
+                    <SelectItem value="60s">60s</SelectItem>
+                    <SelectItem value="70s+">70s+</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Ethnicity <span className="text-destructive">*</span></Label>
+                <Select value={aiCharForm.ethnicity} onValueChange={v => setAiCharForm(p => ({ ...p, ethnicity: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Caucasian">Caucasian</SelectItem>
+                    <SelectItem value="African">African</SelectItem>
+                    <SelectItem value="African American">African American</SelectItem>
+                    <SelectItem value="East Asian">East Asian</SelectItem>
+                    <SelectItem value="South Asian">South Asian</SelectItem>
+                    <SelectItem value="Southeast Asian">Southeast Asian</SelectItem>
+                    <SelectItem value="Middle Eastern">Middle Eastern</SelectItem>
+                    <SelectItem value="Latino/Hispanic">Latino/Hispanic</SelectItem>
+                    <SelectItem value="Native American">Native American</SelectItem>
+                    <SelectItem value="Pacific Islander">Pacific Islander</SelectItem>
+                    <SelectItem value="Mixed">Mixed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Skin Tone</Label>
+                <Select value={aiCharForm.skinTone} onValueChange={v => setAiCharForm(p => ({ ...p, skinTone: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="very fair">Very Fair</SelectItem>
+                    <SelectItem value="fair">Fair</SelectItem>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="olive">Olive</SelectItem>
+                    <SelectItem value="tan">Tan</SelectItem>
+                    <SelectItem value="brown">Brown</SelectItem>
+                    <SelectItem value="dark brown">Dark Brown</SelectItem>
+                    <SelectItem value="deep">Deep</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Build</Label>
+                <Select value={aiCharForm.build} onValueChange={v => setAiCharForm(p => ({ ...p, build: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="petite">Petite</SelectItem>
+                    <SelectItem value="slim">Slim</SelectItem>
+                    <SelectItem value="average">Average</SelectItem>
+                    <SelectItem value="athletic">Athletic</SelectItem>
+                    <SelectItem value="muscular">Muscular</SelectItem>
+                    <SelectItem value="stocky">Stocky</SelectItem>
+                    <SelectItem value="heavy">Heavy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Height</Label>
+                <Select value={aiCharForm.height} onValueChange={v => setAiCharForm(p => ({ ...p, height: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="short">Short</SelectItem>
+                    <SelectItem value="below average">Below Average</SelectItem>
+                    <SelectItem value="average">Average</SelectItem>
+                    <SelectItem value="above average">Above Average</SelectItem>
+                    <SelectItem value="tall">Tall</SelectItem>
+                    <SelectItem value="very tall">Very Tall</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Hair Color <span className="text-destructive">*</span></Label>
+                <Select value={aiCharForm.hairColor} onValueChange={v => setAiCharForm(p => ({ ...p, hairColor: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="black">Black</SelectItem>
+                    <SelectItem value="dark brown">Dark Brown</SelectItem>
+                    <SelectItem value="brown">Brown</SelectItem>
+                    <SelectItem value="light brown">Light Brown</SelectItem>
+                    <SelectItem value="blonde">Blonde</SelectItem>
+                    <SelectItem value="platinum blonde">Platinum Blonde</SelectItem>
+                    <SelectItem value="red">Red</SelectItem>
+                    <SelectItem value="auburn">Auburn</SelectItem>
+                    <SelectItem value="gray">Gray</SelectItem>
+                    <SelectItem value="white">White</SelectItem>
+                    <SelectItem value="bald">Bald</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Hair Style <span className="text-destructive">*</span></Label>
+                <Select value={aiCharForm.hairStyle} onValueChange={v => setAiCharForm(p => ({ ...p, hairStyle: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="short cropped">Short Cropped</SelectItem>
+                    <SelectItem value="buzz cut">Buzz Cut</SelectItem>
+                    <SelectItem value="slicked back">Slicked Back</SelectItem>
+                    <SelectItem value="wavy medium-length">Wavy Medium</SelectItem>
+                    <SelectItem value="long straight">Long Straight</SelectItem>
+                    <SelectItem value="long wavy">Long Wavy</SelectItem>
+                    <SelectItem value="curly">Curly</SelectItem>
+                    <SelectItem value="afro">Afro</SelectItem>
+                    <SelectItem value="braided">Braided</SelectItem>
+                    <SelectItem value="ponytail">Ponytail</SelectItem>
+                    <SelectItem value="bob">Bob</SelectItem>
+                    <SelectItem value="pixie cut">Pixie Cut</SelectItem>
+                    <SelectItem value="dreadlocks">Dreadlocks</SelectItem>
+                    <SelectItem value="mohawk">Mohawk</SelectItem>
+                    <SelectItem value="shaved sides">Shaved Sides</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Eye Color <span className="text-destructive">*</span></Label>
+                <Select value={aiCharForm.eyeColor} onValueChange={v => setAiCharForm(p => ({ ...p, eyeColor: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="brown">Brown</SelectItem>
+                    <SelectItem value="dark brown">Dark Brown</SelectItem>
+                    <SelectItem value="hazel">Hazel</SelectItem>
+                    <SelectItem value="green">Green</SelectItem>
+                    <SelectItem value="blue">Blue</SelectItem>
+                    <SelectItem value="gray">Gray</SelectItem>
+                    <SelectItem value="amber">Amber</SelectItem>
+                    <SelectItem value="black">Black</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Facial Features</Label>
+                <Input placeholder="e.g. sharp jawline, high cheekbones" value={aiCharForm.facialFeatures} onChange={e => setAiCharForm(p => ({ ...p, facialFeatures: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Facial Hair</Label>
+                <Select value={aiCharForm.facialHair} onValueChange={v => setAiCharForm(p => ({ ...p, facialHair: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None / Clean-shaven</SelectItem>
+                    <SelectItem value="light stubble">Light Stubble</SelectItem>
+                    <SelectItem value="heavy stubble">Heavy Stubble</SelectItem>
+                    <SelectItem value="short beard">Short Beard</SelectItem>
+                    <SelectItem value="full beard">Full Beard</SelectItem>
+                    <SelectItem value="goatee">Goatee</SelectItem>
+                    <SelectItem value="mustache">Mustache</SelectItem>
+                    <SelectItem value="handlebar mustache">Handlebar Mustache</SelectItem>
+                    <SelectItem value="sideburns">Sideburns</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Distinguishing Marks</Label>
+                <Input placeholder="e.g. scar on left cheek, freckles, tattoo on neck" value={aiCharForm.distinguishingMarks} onChange={e => setAiCharForm(p => ({ ...p, distinguishingMarks: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Expression</Label>
+                <Select value={aiCharForm.expression} onValueChange={v => setAiCharForm(p => ({ ...p, expression: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="neutral">Neutral</SelectItem>
+                    <SelectItem value="confident">Confident</SelectItem>
+                    <SelectItem value="serious">Serious</SelectItem>
+                    <SelectItem value="warm and friendly">Warm & Friendly</SelectItem>
+                    <SelectItem value="mysterious">Mysterious</SelectItem>
+                    <SelectItem value="intense">Intense</SelectItem>
+                    <SelectItem value="gentle">Gentle</SelectItem>
+                    <SelectItem value="determined">Determined</SelectItem>
+                    <SelectItem value="menacing">Menacing</SelectItem>
+                    <SelectItem value="playful">Playful</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Clothing Style</Label>
+              <Input placeholder="e.g. tailored black suit, leather jacket, military uniform" value={aiCharForm.clothingStyle} onChange={e => setAiCharForm(p => ({ ...p, clothingStyle: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Additional Notes</Label>
+              <Textarea placeholder="Any other details about this character's appearance..." value={aiCharForm.additionalNotes} onChange={e => setAiCharForm(p => ({ ...p, additionalNotes: e.target.value }))} className="min-h-[60px] text-sm bg-background/50 resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAiCharDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" size="sm" disabled={aiCharMutation.isPending}>
+                {aiCharMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-1" />Generating Portrait...</>
+                ) : (
+                  <><Wand2 className="h-4 w-4 mr-1" />Generate Character</>
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Soundtrack Dialog */}
+      <Dialog open={soundtrackDialogOpen} onOpenChange={setSoundtrackDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <Music className="h-4 w-4 text-primary" />
+              Add Soundtrack
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!soundtrackForm.title.trim()) { toast.error("Title is required"); return; }
+              const audioUrl = (window as any).__pendingAudioUrl;
+              const audioKey = (window as any).__pendingAudioKey;
+              createSoundtrackMutation.mutate({
+                projectId,
+                title: soundtrackForm.title.trim(),
+                artist: soundtrackForm.artist.trim() || undefined,
+                genre: soundtrackForm.genre || undefined,
+                mood: soundtrackForm.mood || undefined,
+                notes: soundtrackForm.notes.trim() || undefined,
+                volume: soundtrackForm.volume,
+                fadeIn: soundtrackForm.fadeIn,
+                fadeOut: soundtrackForm.fadeOut,
+                loop: soundtrackForm.loop,
+                fileUrl: audioUrl || undefined,
+                fileKey: audioKey || undefined,
+              });
+              (window as any).__pendingAudioUrl = undefined;
+              (window as any).__pendingAudioKey = undefined;
+            }}
+            className="space-y-4 mt-2"
+          >
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Audio File</Label>
+              <div className="flex items-center gap-3">
+                <Button type="button" variant="outline" size="sm" onClick={() => audioRef.current?.click()} disabled={audioUploading}>
+                  {audioUploading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Upload className="h-4 w-4 mr-1" />}
+                  Upload Audio
+                </Button>
+                <p className="text-xs text-muted-foreground">MP3, WAV, OGG up to 16MB</p>
+                <input ref={audioRef} type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Track Title <span className="text-destructive">*</span></Label>
+              <Input placeholder="e.g. Main Theme" value={soundtrackForm.title} onChange={e => setSoundtrackForm(p => ({ ...p, title: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Artist / Composer</Label>
+              <Input placeholder="e.g. Hans Zimmer" value={soundtrackForm.artist} onChange={e => setSoundtrackForm(p => ({ ...p, artist: e.target.value }))} className="h-9 text-sm bg-background/50" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Genre</Label>
+                <Select value={soundtrackForm.genre} onValueChange={v => setSoundtrackForm(p => ({ ...p, genre: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select genre" /></SelectTrigger>
+                  <SelectContent>
+                    {GENRE_MUSIC_OPTIONS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Mood</Label>
+                <Select value={soundtrackForm.mood} onValueChange={v => setSoundtrackForm(p => ({ ...p, mood: v }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue placeholder="Select mood" /></SelectTrigger>
+                  <SelectContent>
+                    {MOOD_OPTIONS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Volume: {Math.round(soundtrackForm.volume * 100)}%</Label>
+              <Slider
+                value={[soundtrackForm.volume]}
+                onValueChange={([v]) => setSoundtrackForm(p => ({ ...p, volume: v }))}
+                min={0} max={1} step={0.05}
+                className="w-full"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Fade In (sec)</Label>
+                <Input type="number" min={0} max={30} value={soundtrackForm.fadeIn} onChange={e => setSoundtrackForm(p => ({ ...p, fadeIn: Number(e.target.value) }))} className="h-9 text-sm bg-background/50" inputMode="numeric" enterKeyHint="done" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Fade Out (sec)</Label>
+                <Input type="number" min={0} max={30} value={soundtrackForm.fadeOut} onChange={e => setSoundtrackForm(p => ({ ...p, fadeOut: Number(e.target.value) }))} className="h-9 text-sm bg-background/50" inputMode="numeric" enterKeyHint="done" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Loop</Label>
+                <Select value={String(soundtrackForm.loop)} onValueChange={v => setSoundtrackForm(p => ({ ...p, loop: Number(v) }))}>
+                  <SelectTrigger className="h-9 text-sm bg-background/50"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">No Loop</SelectItem>
+                    <SelectItem value="1">Loop</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Director Notes</Label>
+              <Textarea placeholder="Notes about when and how to use this track..." value={soundtrackForm.notes} onChange={e => setSoundtrackForm(p => ({ ...p, notes: e.target.value }))} className="min-h-[60px] text-sm bg-background/50 resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setSoundtrackDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" size="sm" disabled={createSoundtrackMutation.isPending}>
+                {createSoundtrackMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                Add Soundtrack
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Professional Media Player */}
+      {activeVideoMovie && (
+        <MediaPlayer
+          movie={activeVideoMovie}
+          playlist={scenePlaylist}
+          onClose={() => setVideoPreviewSceneId(null)}
+          onNavigate={(movieId) => setVideoPreviewSceneId(movieId)}
+        />
+      )}
+
+      {/* Director's Assistant Chat */}
+      <DirectorChat projectId={project.id} />
+    </div>
+  );
+}
+// ─── Story Editor Component ─────
+function StoryEditor({ project, updateMutation }: { project: any; updateMutation: any }) {
+  const [mainPlot, setMainPlot] = useState(project.mainPlot || "");
+  const [sidePlots, setSidePlots] = useState(project.sidePlots || "");
+  const [plotTwists, setPlotTwists] = useState(project.plotTwists || "");
+  const [characterArcs, setCharacterArcs] = useState(project.characterArcs || "");
+  const [themes, setThemes] = useState(project.themes || "");
+  const [setting, setSetting] = useState(project.setting || "");
+  const [actStructure, setActStructure] = useState(project.actStructure || "three-act");
+  const [tone, setTone] = useState(project.tone || "");
+  const [targetAudience, setTargetAudience] = useState(project.targetAudience || "");
+  const [openingScene, setOpeningScene] = useState(project.openingScene || "");
+  const [climax, setClimax] = useState(project.climax || "");
+  const [storyResolution, setStoryResolution] = useState(project.storyResolution || "");
+  const [dirty, setDirty] = useState(false);
+
+  const mark = (setter: (v: string) => void) => (v: string) => { setter(v); setDirty(true); };
+
+  const handleSave = () => {
+    updateMutation.mutate({
+      id: project.id,
+      mainPlot: mainPlot || undefined,
+      sidePlots: sidePlots || undefined,
+      plotTwists: plotTwists || undefined,
+      characterArcs: characterArcs || undefined,
+      themes: themes || undefined,
+      setting: setting || undefined,
+      actStructure: actStructure || undefined,
+      tone: tone || undefined,
+      targetAudience: targetAudience || undefined,
+      openingScene: openingScene || undefined,
+      climax: climax || undefined,
+      storyResolution: storyResolution || undefined,
+    });
+    setDirty(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">Story, plot, and narrative details</p>
+          <p className="text-xs text-muted-foreground/60 mt-0.5">The more detail you provide, the better the AI-generated film</p>
+        </div>
+        <Button size="sm" disabled={!dirty || updateMutation.isPending} onClick={handleSave}>
+          {updateMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+          Save Changes
+        </Button>
+      </div>
+
+      {/* Structure & Tone */}
+      <Card className="bg-card/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Structure & Tone</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Act Structure</Label>
+              <Select value={actStructure} onValueChange={(v) => { setActStructure(v); setDirty(true); }}>
+                <SelectTrigger className="bg-background/50 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACT_STRUCTURE_OPTIONS.map((a) => (
+                    <SelectItem key={a} value={a}>{ACT_STRUCTURE_LABELS[a]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Tone / Style</Label>
+              <Select value={tone} onValueChange={(v) => { setTone(v); setDirty(true); }}>
+                <SelectTrigger className="bg-background/50 h-8 text-xs">
+                  <SelectValue placeholder="Select tone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TONE_OPTIONS.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Target Audience</Label>
+              <Select value={targetAudience} onValueChange={(v) => { setTargetAudience(v); setDirty(true); }}>
+                <SelectTrigger className="bg-background/50 h-8 text-xs">
+                  <SelectValue placeholder="Select audience" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TARGET_AUDIENCE_OPTIONS.map((a) => (
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Central Themes</Label>
+            <Input
+              placeholder="e.g. Redemption, Love, Betrayal, Identity, Power"
+              value={themes}
+              onChange={(e) => mark(setThemes)(e.target.value)}
+              className="bg-background/50 h-8 text-xs" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="next" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Main Plot & Subplots */}
+      <Card className="bg-card/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Plot</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Main Plot</Label>
+            <Textarea
+              placeholder="Describe the main storyline in detail — the central conflict, protagonist's journey, and how events unfold..."
+              value={mainPlot}
+              onChange={(e) => mark(setMainPlot)(e.target.value)}
+              className="bg-background/50 min-h-[120px] text-xs resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Side Plots / Subplots</Label>
+            <Textarea
+              placeholder="Secondary storylines — romance, rivalry, mystery, parallel journeys..."
+              value={sidePlots}
+              onChange={(e) => mark(setSidePlots)(e.target.value)}
+              className="bg-background/50 min-h-[100px] text-xs resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Plot Twists & Surprises</Label>
+            <Textarea
+              placeholder="Key twists, betrayals, revelations, unexpected turns and when they occur..."
+              value={plotTwists}
+              onChange={(e) => mark(setPlotTwists)(e.target.value)}
+              className="bg-background/50 min-h-[100px] text-xs resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Character Arcs & Development</Label>
+            <Textarea
+              placeholder="How do your main characters change? What lessons do they learn? What flaws do they overcome?"
+              value={characterArcs}
+              onChange={(e) => mark(setCharacterArcs)(e.target.value)}
+              className="bg-background/50 min-h-[100px] text-xs resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* World & Key Moments */}
+      <Card className="bg-card/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">World & Key Moments</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Setting / World-Building</Label>
+            <Textarea
+              placeholder="Time period, location, culture, technology, rules of the universe..."
+              value={setting}
+              onChange={(e) => mark(setSetting)(e.target.value)}
+              className="bg-background/50 min-h-[100px] text-xs resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Opening Scene</Label>
+            <Textarea
+              placeholder="How does the film begin? The first thing the audience sees — set the tone, introduce the world..."
+              value={openingScene}
+              onChange={(e) => mark(setOpeningScene)(e.target.value)}
+              className="bg-background/50 min-h-[80px] text-xs resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Climax</Label>
+            <Textarea
+              placeholder="The peak of tension — the central conflict comes to a head. What happens? Who is involved?"
+              value={climax}
+              onChange={(e) => mark(setClimax)(e.target.value)}
+              className="bg-background/50 min-h-[80px] text-xs resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Resolution / Ending</Label>
+            <Textarea
+              placeholder="How does the story end? Happy, bittersweet, tragic, open-ended? What is the audience left feeling?"
+              value={storyResolution}
+              onChange={(e) => mark(setStoryResolution)(e.target.value)}
+              className="bg-background/50 min-h-[80px] text-xs resize-y" autoCapitalize="sentences" autoCorrect="on" enterKeyHint="done" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {dirty && (
+        <div className="flex justify-end">
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
+            {updateMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+            Save All Story Changes
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
