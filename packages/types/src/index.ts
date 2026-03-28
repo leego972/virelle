@@ -11,4 +11,4 @@
  */
 
 export * from "./types";
-export * from "./types_additions";
+// Note: types_additions.ts constants are already included in types.ts

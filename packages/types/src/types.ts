@@ -3,8 +3,8 @@
  * Import shared types from this single entry point.
  */
 
-export type * from "../drizzle/schema";
-export * from "./_core/errors";
+// Note: drizzle schema types live in apps/web (app-specific, not shared)
+// Note: HTTP error helpers live in apps/web/shared/_core/errors.ts
 
 // Scene parameter options for the manual editor
 export const TIME_OF_DAY_OPTIONS = ["dawn", "morning", "afternoon", "evening", "night", "golden-hour"] as const;
