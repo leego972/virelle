@@ -8,5 +8,10 @@
     "target": "ES2022",
     "lib": ["ES2022"]
   },
-  "exclude": ["node_modules", "apps/mobile", "apps/desktop"]
+  "exclude": [
+    "node_modules",
+    "apps/mobile",
+    "apps/desktop",
+    "apps/web/client"
+  ]
 }
