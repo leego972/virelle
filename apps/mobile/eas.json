@@ -34,6 +34,7 @@
         "ascApiKeyIssuerId": "$EXPO_APPLE_API_ISSUER_ID",
         "ascApiKeyId": "$EXPO_APPLE_API_KEY_ID",
         "appleTeamId": "5AUSX9646V",
+        "ascAppId": "6761315616",
         "language": "en-US"
       }
     }
