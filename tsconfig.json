@@ -6,12 +6,10 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "target": "ES2022",
-    "lib": ["ES2022"]
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "noEmit": true
   },
-  "exclude": [
-    "node_modules",
-    "apps/mobile",
-    "apps/desktop",
-    "apps/web/client"
-  ]
+  "include": ["packages/**/*"],
+  "exclude": ["node_modules", "apps", "**/node_modules", "**/dist", "**/build"]
 }
