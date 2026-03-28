@@ -127,8 +127,9 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Write Apple API key
         run: |
-          mkdir -p /root/.appstoreconnect/private_keys
-          echo "$APPLE_API_PRIVATE_KEY" > /root/.appstoreconnect/private_keys/AuthKey_2WG5YUFL55.p8
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          echo "$APPLE_API_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_2WG5YUFL55.p8"
+          chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_2WG5YUFL55.p8"
         env:
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
       - name: Queue iOS build (auto-submit to App Store)
@@ -136,8 +137,10 @@ jobs:
         # completes. --no-wait exits immediately; EAS notifies by email.
         # ascApiKeyPath and ascApiKeyIssuerId are set in eas.json submit config.
         run: |
-          # Substitute the issuer ID into eas.json at runtime
-          sed -i "s|\$APPLE_API_ISSUER_ID|$APPLE_API_ISSUER_ID|g" apps/mobile/eas.json
+          # Patch eas.json at runtime: set the correct key path and issuer ID
+          KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_2WG5YUFL55.p8"
+          sed -i "s|\$APPLE_API_ISSUER_ID|${APPLE_API_ISSUER_ID}|g" apps/mobile/eas.json
+          sed -i "s|/root/.appstoreconnect/private_keys/AuthKey_2WG5YUFL55.p8|${KEY_PATH}|g" apps/mobile/eas.json
           pnpm --filter @virelle/mobile exec eas build \
             --platform ios \
             --non-interactive \
