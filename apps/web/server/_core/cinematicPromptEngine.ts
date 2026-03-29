@@ -334,9 +334,9 @@ export function buildVisualDNA(project: {
   logline?: string | null;
   cinematicStyle?: string | null;
   colorPalette?: string | null;
-  referenceFilms?: string[] | null;
+  referenceFilms?: string[] | null | unknown;
   productionStyle?: string | null;
-  lookbookUrls?: string[] | null;
+  lookbookUrls?: string[] | null | unknown;
 }, characters: Array<{
   name: string;
   description?: string | null;
@@ -393,12 +393,10 @@ export function buildVisualDNA(project: {
     consistencyParts[2] = `Visual style: ${project.colorPalette}`;
     consistencyParts.push(`Color palette: ${project.colorPalette}`);
   }
-  if (project.referenceFilms && project.referenceFilms.length > 0) {
-    const refs = Array.isArray(project.referenceFilms) ? project.referenceFilms : [];
-    if (refs.length > 0) {
-      // Override the genre profile reference films with the director's explicit choices
-      consistencyParts[7] = `Reference films: ${refs.join(", ")}`;
-    }
+  if (Array.isArray(project.referenceFilms) && project.referenceFilms.length > 0) {
+    const refs = project.referenceFilms as string[];
+    // Override the genre profile reference films with the director's explicit choices
+    consistencyParts[7] = `Reference films: ${refs.join(", ")}`;
   }
   if (project.productionStyle) {
     consistencyParts.push(`Production style: ${project.productionStyle}`);
@@ -809,7 +807,7 @@ export function buildSceneBreakdownSystemPrompt(project: {
   logline?: string | null;
   cinematicStyle?: string | null;
   colorPalette?: string | null;
-  referenceFilms?: string[] | null;
+  referenceFilms?: string[] | null | unknown;
   productionStyle?: string | null;
 }): string {
   const genre = project.genre || "Drama";
@@ -860,8 +858,8 @@ DIRECTOR-FIRST RULES (non-negotiable):
   if (project.logline) visualDNALines.push(`Logline: ${project.logline}`);
   if (project.cinematicStyle) visualDNALines.push(`Cinematic style: ${project.cinematicStyle}`);
   if (project.colorPalette) visualDNALines.push(`Color palette: ${project.colorPalette}`);
-  if (project.referenceFilms && project.referenceFilms.length > 0) {
-    visualDNALines.push(`Reference films: ${project.referenceFilms.join(", ")}`);
+  if (Array.isArray(project.referenceFilms) && project.referenceFilms.length > 0) {
+    visualDNALines.push(`Reference films: ${(project.referenceFilms as string[]).join(", ")}`);
   }
   if (project.productionStyle) visualDNALines.push(`Production style: ${project.productionStyle}`);
   const visualDNABlock = visualDNALines.length > 0
