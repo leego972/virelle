@@ -406,6 +406,13 @@ export const appRouter = router({
         climax: z.string().optional(),
         storyResolution: z.string().optional(),
         cinemaIndustry: z.string().optional(),
+        // Visual DNA (Phase 5)
+        logline: z.string().optional(),
+        lookbookUrls: z.array(z.string()).optional(),
+        referenceFilms: z.array(z.string()).optional(),
+        cinematicStyle: z.string().optional(),
+        productionStyle: z.string().optional(),
+        colorPalette: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // Credits: deduct for creating a project
@@ -464,6 +471,13 @@ export const appRouter = router({
         climax: z.string().optional(),
         storyResolution: z.string().optional(),
         cinemaIndustry: z.string().optional(),
+        // Visual DNA (Phase 5)
+        logline: z.string().optional(),
+        lookbookUrls: z.array(z.string()).optional(),
+        referenceFilms: z.array(z.string()).optional(),
+        cinematicStyle: z.string().optional(),
+        productionStyle: z.string().optional(),
+        colorPalette: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...data } = input;
@@ -1164,6 +1178,11 @@ export const appRouter = router({
         externalFootageUrl: z.string().optional(),
         externalFootageType: z.string().optional(),
         externalFootageLabel: z.string().optional(),
+        // Long-form production hierarchy (Phase 2: Act/Sequence Schema)
+        actNumber: z.number().int().min(1).max(10).optional(),
+        sequenceTitle: z.string().optional(),
+        reelId: z.number().int().optional(),
+        productionStage: z.enum(["development","pre-production","production","post-production","locked"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // Content moderation scan on scene description and dialogue
@@ -1300,6 +1319,11 @@ export const appRouter = router({
         videoJobId: z.string().optional(),
         // SFX production notes
         sfxProductionNotes: z.string().optional(),
+        // Long-form production hierarchy (Phase 2: Act/Sequence Schema)
+        actNumber: z.number().int().min(1).max(10).optional(),
+        sequenceTitle: z.string().optional(),
+        reelId: z.number().int().optional(),
+        productionStage: z.enum(["development","pre-production","production","post-production","locked"]).optional(),
       }))
        .mutation(async ({ ctx, input }) => {
         const scene = await db.getSceneById(input.id);
@@ -2809,6 +2833,31 @@ Break this into 8-15 scenes. For each scene, provide:
       .input(z.object({ projectId: z.number() }))
       .query(async ({ input }) => {
         return db.getProjectJobs(input.projectId);
+      }),
+    // u2500u2500 List all active jobs for the current user (Phase 4: Global Render Queue) u2500u2500
+    listActiveJobs: protectedProcedure
+      .query(async ({ ctx }) => {
+        const userProjects = await db.getUserProjects(ctx.user.id, 50);
+        if (!userProjects.length) return [];
+        const dbConn = await db.getDb();
+        if (!dbConn) return [];
+        const projectIds = userProjects.map((p: any) => p.id).join(",");
+        const [rows] = await (dbConn as any).execute(
+          `SELECT j.*, p.title as projectTitle FROM generationJobs j JOIN projects p ON j.projectId = p.id WHERE j.projectId IN (${projectIds}) AND j.status IN ("queued","processing") ORDER BY j.createdAt DESC LIMIT 20`
+        );
+        return rows as any[];
+      }),
+    listRecentJobs: protectedProcedure
+      .query(async ({ ctx }) => {
+        const userProjects = await db.getUserProjects(ctx.user.id, 50);
+        if (!userProjects.length) return [];
+        const dbConn = await db.getDb();
+        if (!dbConn) return [];
+        const projectIds = userProjects.map((p: any) => p.id).join(",");
+        const [rows] = await (dbConn as any).execute(
+          `SELECT j.*, p.title as projectTitle FROM generationJobs j JOIN projects p ON j.projectId = p.id WHERE j.projectId IN (${projectIds}) AND j.status IN ("completed","failed") ORDER BY j.updatedAt DESC LIMIT 10`
+        );
+        return rows as any[];
       }),
 
     // ── Generate Full Film (90-minute pipeline) ──

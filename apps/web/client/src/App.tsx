@@ -22,6 +22,8 @@ import { useContentProtection } from "./components/ContentProtection";
 const Projects = lazy(() => import("./pages/Projects"));
 const ProjectDetail = lazy(() => import("./pages/ProjectDetail"));
 const NewProject = lazy(() => import("./pages/NewProject"));
+const GreenlightFlow = lazy(() => import("./pages/GreenlightFlow"));
+const ProductionBoard = lazy(() => import("./pages/ProductionBoard"));
 const Characters = lazy(() => import("./pages/Characters"));
 const SceneEditor = lazy(() => import("./pages/SceneEditor"));
 const Movies = lazy(() => import("./pages/Movies"));
@@ -206,9 +208,11 @@ function Router() {
               <Route path="/" component={Home} />
               <Route path="/dashboard" component={Home} />
               <Route path="/projects">{() => <Projects />}</Route>
+              <Route path="/projects/greenlight">{() => <GreenlightFlow />}</Route>
               <Route path="/projects/new">{() => <NewProject />}</Route>
               <Route path="/projects/:id">{() => <ProjectDetail />}</Route>
               <Route path="/projects/:id/scenes">{() => <SceneEditor />}</Route>
+              <Route path="/projects/:id/board">{() => <LazyPage><ProductionBoard /></LazyPage>}</Route>
               <Route path="/movies">{() => <Movies />}</Route>
               <Route path="/assistant">{() => <LazyPage><AssistantPage /></LazyPage>}</Route>
               <Route path="/poster-maker">{() => <AdPosterMaker />}</Route>

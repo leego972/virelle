@@ -330,6 +330,13 @@ export function buildVisualDNA(project: {
   rating?: string | null;
   themes?: string | null;
   setting?: string | null;
+  // Visual DNA fields (Phase 6)
+  logline?: string | null;
+  cinematicStyle?: string | null;
+  colorPalette?: string | null;
+  referenceFilms?: string[] | null;
+  productionStyle?: string | null;
+  lookbookUrls?: string[] | null;
 }, characters: Array<{
   name: string;
   description?: string | null;
@@ -376,6 +383,29 @@ export function buildVisualDNA(project: {
   }
   if (project.setting) consistencyParts.push(`Setting: ${project.setting}`);
   if (project.themes) consistencyParts.push(`Themes: ${project.themes}`);
+  // ─── Phase 6: Visual DNA Enforcement ───
+  // Override genre-default profile with project-specific Visual DNA when set
+  if (project.cinematicStyle) {
+    consistencyParts.push(`Cinematic style: ${project.cinematicStyle}`);
+  }
+  if (project.colorPalette) {
+    // Override the genre profile color palette with the director's explicit choice
+    consistencyParts[2] = `Visual style: ${project.colorPalette}`;
+    consistencyParts.push(`Color palette: ${project.colorPalette}`);
+  }
+  if (project.referenceFilms && project.referenceFilms.length > 0) {
+    const refs = Array.isArray(project.referenceFilms) ? project.referenceFilms : [];
+    if (refs.length > 0) {
+      // Override the genre profile reference films with the director's explicit choices
+      consistencyParts[7] = `Reference films: ${refs.join(", ")}`;
+    }
+  }
+  if (project.productionStyle) {
+    consistencyParts.push(`Production style: ${project.productionStyle}`);
+  }
+  if (project.logline) {
+    consistencyParts.push(`Story: ${project.logline}`);
+  }
 
   return {
     genreProfile: profile,
@@ -775,6 +805,12 @@ export function buildSceneBreakdownSystemPrompt(project: {
   themes?: string | null;
   setting?: string | null;
   creativeLeeway?: boolean;
+  // Visual DNA fields (Phase 6)
+  logline?: string | null;
+  cinematicStyle?: string | null;
+  colorPalette?: string | null;
+  referenceFilms?: string[] | null;
+  productionStyle?: string | null;
 }): string {
   const genre = project.genre || "Drama";
   const profile = GENRE_PROFILES[genre] || DEFAULT_PROFILE;
@@ -819,10 +855,23 @@ DIRECTOR-FIRST RULES (non-negotiable):
 - Use the genre visual profile below ONLY as a technical reference for filling in unspecified technical fields (lighting, lens, etc.) — never to override the director's story.
 - Genre visual reference (use only for unspecified technical fields): ${profile.referenceFilms}, ${profile.colorPalette}, ${profile.lightingStyle}`;
 
+  // Build Visual DNA override string for the prompt
+  const visualDNALines: string[] = [];
+  if (project.logline) visualDNALines.push(`Logline: ${project.logline}`);
+  if (project.cinematicStyle) visualDNALines.push(`Cinematic style: ${project.cinematicStyle}`);
+  if (project.colorPalette) visualDNALines.push(`Color palette: ${project.colorPalette}`);
+  if (project.referenceFilms && project.referenceFilms.length > 0) {
+    visualDNALines.push(`Reference films: ${project.referenceFilms.join(", ")}`);
+  }
+  if (project.productionStyle) visualDNALines.push(`Production style: ${project.productionStyle}`);
+  const visualDNABlock = visualDNALines.length > 0
+    ? `\nVISUAL DNA (apply to every scene):\n${visualDNALines.join("\n")}`
+    : "";
+
   return `You are a professional film production AI breaking down a director's film concept into individual scenes. Your primary obligation is to faithfully serve the director's vision for "${project.title}", a ${duration}-minute ${project.rating || "PG-13"} rated ${genre} film.
 ${project.tone ? `Director's tone: ${project.tone}` : ""}
 ${project.themes ? `Director's themes: ${project.themes}` : ""}
-${project.setting ? `Director's setting: ${project.setting}` : ""}
+${project.setting ? `Director's setting: ${project.setting}` : ""}${visualDNABlock}
 ${creativeGuidance}
 
 INSTRUCTIONS:

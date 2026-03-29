@@ -928,6 +928,13 @@ export async function runAutoMigration(): Promise<void> {
     { table: "users", column: "creditsResetAt", definition: "TIMESTAMP NULL" },
     // Projects table - cinema industry
     { table: "projects", column: "cinemaIndustry", definition: "VARCHAR(128) NULL DEFAULT 'Hollywood'" },
+    // Projects table - Visual DNA fields (Phase 5: Visual DNA Enforcement)
+    { table: "projects", column: "logline", definition: "TEXT NULL" },
+    { table: "projects", column: "lookbookUrls", definition: "JSON NULL" },
+    { table: "projects", column: "referenceFilms", definition: "JSON NULL" },
+    { table: "projects", column: "cinematicStyle", definition: "VARCHAR(255) NULL" },
+    { table: "projects", column: "productionStyle", definition: "VARCHAR(128) NULL" },
+    { table: "projects", column: "colorPalette", definition: "VARCHAR(255) NULL" },
     // Scenes table - soundtrack fields
     { table: "scenes", column: "soundtrackId", definition: "INT NULL" },
     { table: "scenes", column: "soundtrackVolume", definition: "INT NOT NULL DEFAULT 80" },
@@ -1020,6 +1027,11 @@ export async function runAutoMigration(): Promise<void> {
     { table: "scenes", column: "thumbnailUrl", definition: "TEXT NULL" },
     { table: "scenes", column: "generatedUrl", definition: "TEXT NULL" },
     { table: "scenes", column: "referenceImages", definition: "JSON NULL" },
+    // Long-form production hierarchy fields (Phase 2: Act/Sequence Schema)
+    { table: "scenes", column: "actNumber", definition: "INT NULL DEFAULT 1" },
+    { table: "scenes", column: "sequenceTitle", definition: "VARCHAR(255) NULL" },
+    { table: "scenes", column: "reelId", definition: "INT NULL" },
+    { table: "scenes", column: "productionStage", definition: "VARCHAR(64) NULL DEFAULT 'development'" },
     // Characters table - extended profile fields
     { table: "characters", column: "role", definition: "VARCHAR(128) NULL" },
     { table: "characters", column: "storyImportance", definition: "VARCHAR(64) NULL" },

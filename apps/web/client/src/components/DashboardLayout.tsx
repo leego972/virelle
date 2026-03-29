@@ -1,3 +1,5 @@
+import ProjectWorkspaceSidebar from "@/components/ProjectWorkspaceSidebar";
+import GlobalRenderQueue from "@/components/GlobalRenderQueue";
 import { useAuth } from "@/_core/hooks/useAuth";
 import LeegoFooter from "@/components/LeegoFooter";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -56,7 +58,7 @@ import {
   Languages,
   MessageSquare,
 } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useRef, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
@@ -251,6 +253,11 @@ function DashboardLayoutContent({
     if (path === "/") return location === "/";
     return location.startsWith(path);
   };
+  // Detect if we are inside a project workspace (e.g. /projects/42 or /projects/42/scenes)
+  const projectWorkspaceMatch = useMemo(() => {
+    const m = location.match(/^\/projects\/(\d+)(?:\/|$)/);
+    return m ? parseInt(m[1], 10) : null;
+  }, [location]);
 
   useEffect(() => {
     if (isCollapsed) setIsResizing(false);
@@ -301,57 +308,72 @@ function DashboardLayoutContent({
                   </span>
                 </div>
               )}
-              {!isCollapsed && <NotificationBell />}
+              {!isCollapsed && (
+                <div className="flex items-center gap-1">
+                  <GlobalRenderQueue />
+                  <NotificationBell />
+                </div>
+              )}
             </div>
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
-            {menuGroups.filter(group => group.label !== "Tools" || isCreator).map((group) => (
-              <SidebarMenu key={group.label} className="px-2 py-1">
-                <div className="px-2 mb-1 mt-2 group-data-[collapsible=icon]:hidden">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">{group.label}</span>
-                </div>
-                {group.items.map((item) => {
-                  const active = isActive(item.path);
-                  return (
-                    <SidebarMenuItem key={item.path}>
-                      <SidebarMenuButton
-                        isActive={active}
-                        onClick={() => setLocation(item.path)}
-                        tooltip={item.label}
-                        className="h-9 md:h-10 transition-all font-normal"
-                      >
-                        <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            ))}
-            {/* Admin section - only visible to admins */}
-            {user?.role === "admin" && (
-              <SidebarMenu className="px-2 py-1 mt-4">
-                <div className="px-2 mb-1 group-data-[collapsible=icon]:hidden">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Admin</span>
-                </div>
-                {adminMenuItems.map((item) => {
-                  const active = isActive(item.path);
-                  return (
-                    <SidebarMenuItem key={item.path}>
-                      <SidebarMenuButton
-                        isActive={active}
-                        onClick={() => setLocation(item.path)}
-                        tooltip={item.label}
-                        className="h-10 transition-all font-normal"
-                      >
-                        <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
+            {/* When inside a project workspace, show the production pipeline sidebar */}
+            {projectWorkspaceMatch ? (
+              <ProjectWorkspaceSidebar
+                projectId={projectWorkspaceMatch}
+                isCollapsed={isCollapsed}
+              />
+            ) : (
+              <>
+                {menuGroups.filter(group => group.label !== "Tools" || isCreator).map((group) => (
+                  <SidebarMenu key={group.label} className="px-2 py-1">
+                    <div className="px-2 mb-1 mt-2 group-data-[collapsible=icon]:hidden">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">{group.label}</span>
+                    </div>
+                    {group.items.map((item) => {
+                      const active = isActive(item.path);
+                      return (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            isActive={active}
+                            onClick={() => setLocation(item.path)}
+                            tooltip={item.label}
+                            className="h-9 md:h-10 transition-all font-normal"
+                          >
+                            <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
+                            <span>{item.label}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                ))}
+                {/* Admin section - only visible to admins */}
+                {user?.role === "admin" && (
+                  <SidebarMenu className="px-2 py-1 mt-4">
+                    <div className="px-2 mb-1 group-data-[collapsible=icon]:hidden">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Admin</span>
+                    </div>
+                    {adminMenuItems.map((item) => {
+                      const active = isActive(item.path);
+                      return (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            isActive={active}
+                            onClick={() => setLocation(item.path)}
+                            tooltip={item.label}
+                            className="h-10 transition-all font-normal"
+                          >
+                            <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
+                            <span>{item.label}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                )}
+              </>
             )}
           </SidebarContent>
 
@@ -525,15 +547,18 @@ function DashboardLayoutContent({
               <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663418605762/hxRQQgsmyjgcByim.png" alt="Virelle Studios" className="h-8 w-8 rounded" />
               <span className="text-base font-bold">Virelle Studios</span>
             </div>
-            {switchable && (
-              <button
-                onClick={toggleTheme}
-                className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-accent active:bg-accent/70 transition-colors"
-                aria-label="Toggle theme"
-              >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-            )}
+            <div className="flex items-center gap-1">
+              <GlobalRenderQueue />
+              {switchable && (
+                <button
+                  onClick={toggleTheme}
+                  className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-accent active:bg-accent/70 transition-colors"
+                  aria-label="Toggle theme"
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </button>
+              )}
+            </div>
           </div>
         )}
         <main className="flex-1 p-4 sm:p-6 flex flex-col min-h-0 relative" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>

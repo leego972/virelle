@@ -110,6 +110,13 @@ export const projects = mysqlTable("projects", {
   openingScene: text("openingScene"), // description of the opening
   climax: text("climax"), // description of the climax
   storyResolution: text("storyResolution"), // how the story resolves
+  // u2500u2500u2500 Visual DNA (Phase 5: Visual DNA Enforcement) u2500u2500u2500
+  logline: text("logline"), // one-sentence pitch
+  lookbookUrls: json("lookbookUrls"), // array of reference image URLs
+  referenceFilms: json("referenceFilms"), // ["Blade Runner 2049", "Dune"]
+  cinematicStyle: varchar("cinematicStyle", { length: 255 }), // "neo-noir, high contrast, anamorphic"
+  productionStyle: varchar("productionStyle", { length: 128 }), // "indie", "blockbuster", "arthouse"
+  colorPalette: varchar("colorPalette", { length: 255 }), // "warm amber, deep shadow, teal highlights"
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -297,6 +304,11 @@ export const scenes = mysqlTable("scenes", {
   videoUrl: text("videoUrl"), // S3 URL for the generated video clip (MP4)
   videoJobId: varchar("videoJobId", { length: 255 }), // job ID for tracking
   status: mysqlEnum("status", ["draft", "generating", "completed", "failed"]).default("draft").notNull(),
+  // ─── Long-form Production Hierarchy ───
+  actNumber: int("actNumber").default(1),                          // Act 1, 2, 3 (or more for episodic/non-linear)
+  sequenceTitle: varchar("sequenceTitle", { length: 255 }),        // e.g. "The Heist", "The Confrontation"
+  reelId: int("reelId"),                                           // Reel number for physical/export grouping
+  productionStage: mysqlEnum("productionStage", ["development", "pre-production", "production", "post-production", "locked"]).default("development"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
