@@ -1298,7 +1298,7 @@ export const appRouter = router({
           projectId: input.projectId,
           userId: ctx.user.id,
           action: "scene_create",
-          entityType: "scene",
+          targetType: "scene",
           meta: { title: input.title, role: access.role },
         }).catch(() => {});
         return db.createScene(input as any);
@@ -5421,8 +5421,8 @@ Generate a detailed production budget estimate.`,
           projectId: input.projectId,
           userId: ctx.user.id,
           action: "collaborator_role_change",
-          entityType: "collaborator",
-          entityId: input.id,
+          targetType: "collaborator",
+          targetId: input.id,
           meta: { newRole: input.role },
         }).catch(() => {});
         return db.updateCollaborator(input.id, { role: input.role });
@@ -5443,8 +5443,8 @@ Generate a detailed production budget estimate.`,
             projectId: input.projectId,
             userId: ctx.user.id,
             action: "collaborator_removed",
-            entityType: "collaborator",
-            entityId: input.id,
+            targetType: "collaborator",
+            targetId: input.id,
             meta: { collaboratorEmail: target.email, removedBy: ctx.user.id },
           }).catch(() => {});
         }
@@ -8164,10 +8164,11 @@ Generate a professional shot list with 3-8 shots. For each shot return a JSON ar
 [{ "shotNumber": "1A", "shotType": "WS", "cameraMovement": "Static", "lens": "35mm", "framing": "...", "action": "...", "dialogue": "...", "props": "...", "wardrobe": "...", "vfxNotes": "...", "lightingNotes": "...", "soundNotes": "...", "estimatedDuration": 8, "unit": "A Camera", "notes": "..." }]
 
 Return ONLY the JSON array, no other text.`;
-        const raw = await invokeLLM([{ role: "user", content: prompt }], { temperature: 0.3, maxTokens: 2000 });
+        const rawResult = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 2000 });
+        const rawText = (rawResult.choices?.[0]?.message?.content as string) || "";
         let parsed: any[] = [];
         try {
-          const match = raw.match(/\[.*\]/s);
+          const match = rawText.match(/\[.*\]/s);
           parsed = match ? JSON.parse(match[0]) : [];
         } catch { parsed = []; }
         const saved = [];
@@ -8257,9 +8258,10 @@ SCENE BREAKDOWN:\n${sceneBlock}\n\nIdentify ALL continuity issues. For each issu
 [{ "sceneATitle": "...", "sceneBTitle": "...", "severity": "high|medium|low", "category": "wardrobe|props|lighting|character|location|timeline", "description": "...", "suggestion": "..." }]
 
 Return ONLY the JSON array.`;
-        const raw = await invokeLLM([{ role: "user", content: prompt }], { temperature: 0.2, maxTokens: 3000 });
+        const rawResult2 = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 3000 });
+        const rawText2 = (rawResult2.choices?.[0]?.message?.content as string) || "";
         let parsed: any[] = [];
-        try { const m = raw.match(/\[.*\]/s); parsed = m ? JSON.parse(m[0]) : []; } catch { parsed = []; }
+        try { const m = rawText2.match(/\[.*\]/s); parsed = m ? JSON.parse(m[0]) : []; } catch { parsed = []; }
         const sceneByTitle = new Map(scenes.map((s: any) => [s.title?.toLowerCase(), s]));
         let persisted = 0;
         const issues = [];

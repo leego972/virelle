@@ -267,7 +267,7 @@ export default function Collaboration() {
                       <div className="flex items-center gap-2 shrink-0">
                         <Select
                           value={member.role}
-                          onValueChange={(v) => updateRoleMutation.mutate({ id: member.id, role: v as any })}
+                          onValueChange={(v) => updateRoleMutation.mutate({ id: member.id, role: v as any, projectId })}
                         >
                           <SelectTrigger className="h-8 w-28 text-xs">
                             <SelectValue />
@@ -285,7 +285,7 @@ export default function Collaboration() {
                           className="h-8 w-8 text-destructive"
                           onClick={() => {
                             if (confirm("Remove this team member?")) {
-                              removeMutation.mutate({ id: member.id });
+                              removeMutation.mutate({ id: member.id, projectId });
                             }
                           }}
                         >
@@ -350,7 +350,7 @@ export default function Collaboration() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
-                          onClick={() => removeMutation.mutate({ id: invite.id })}
+                          onClick={() => removeMutation.mutate({ id: invite.id, projectId })}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -389,7 +389,7 @@ export default function Collaboration() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive"
-                      onClick={() => removeMutation.mutate({ id: invite.id })}
+                      onClick={() => removeMutation.mutate({ id: invite.id, projectId })}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
