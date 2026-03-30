@@ -3764,6 +3764,81 @@ FORMAT RULES (always apply):
         const result = llmResult.choices[0]?.message?.content || "";
         return { text: typeof result === "string" ? result : "" };
       }),
+
+    // ─── Screenplay → Scene breakdown ──────────────────────────────────────────
+    breakdown: creationProcedure
+      .input(z.object({
+        projectId: z.number(),
+        scriptId: z.number().optional(),
+        scriptText: z.string().min(10).max(80000).optional(),
+        replaceExisting: z.boolean().default(false),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        rateLimitHeavyAI(ctx.user.id);
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "No access to this project" });
+        if (access.role === "viewer") throw new TRPCError({ code: "FORBIDDEN", message: "Viewers cannot modify scenes" });
+        const project = access.project;
+        // ── Credits: 8 credits for screenplay breakdown (heavy LLM call) ────────
+        requireGenerationQuota(ctx.user);
+        try { await db.deductCredits(ctx.user.id, CREDIT_COSTS.script_writer_ai.cost, "script_breakdown", "Script Breakdown — AI screenplay-to-scenes parse"); } catch (e: any) { if (e.message?.includes("INSUFFICIENT_CREDITS")) throw new TRPCError({ code: "FORBIDDEN", message: e.message }); }
+        const _bkCreditCost = CREDIT_COSTS.script_writer_ai.cost;
+
+        let screenplay = input.scriptText || "";
+        if (!screenplay && input.scriptId) {
+          const script = await db.getScriptById(input.scriptId);
+          if (!script) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
+          screenplay = (script as any).content || "";
+        }
+        if (!screenplay.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "No screenplay text provided" });
+
+        const breakdownPrompt = `You are a professional script supervisor breaking down a feature film screenplay into individual scene records for a production management system.
+FILM: "${project.title}" (${project.genre || "Drama"})
+SCREENPLAY:
+${screenplay.slice(0, 60000)}
+Extract every scene. For each scene return a JSON array:
+[{ "title": "Brief scene title", "description": "Visual description", "slugline": "INT./EXT. LOCATION - TIME", "locationType": "INT", "locationDetail": "Location name", "timeOfDay": "DAY", "actNumber": 1, "sequenceTitle": "", "dialogueText": "", "actionDescription": "", "estimatedDuration": 30, "emotionalTone": "dramatic", "vfxRequired": false, "productionStage": "development" }]
+Return ONLY the JSON array. No commentary.`;
+
+        let bkResult: any;
+        try {
+          bkResult = await invokeLLM({ messages: [{ role: "user", content: breakdownPrompt }], maxTokens: 8000 });
+        } catch (_bkLLMErr: any) {
+          try { await db.addCredits(ctx.user.id, _bkCreditCost, "script_breakdown_refund", "Refund: Script breakdown LLM call failed"); } catch {}
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI breakdown failed. Your 8 credits have been refunded." });
+        }
+        const bkText = (bkResult.choices?.[0]?.message?.content as string) || "";
+        let bkParsed: any[] = [];
+        try { const bkMatch = bkText.match(/\[.*\]/s); bkParsed = bkMatch ? JSON.parse(bkMatch[0]) : []; } catch { bkParsed = []; }
+
+        if (bkParsed.length === 0) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI could not extract scenes. Ensure the screenplay is in standard format." });
+
+        if (input.replaceExisting) {
+          const toDelete = await db.getProjectScenes(input.projectId);
+          for (const s of toDelete) { await db.deleteScene(s.id); }
+        }
+
+        const existingNow = await db.getProjectScenes(input.projectId);
+        const baseIdx = existingNow.length;
+        const bkCreated = [];
+        for (let i = 0; i < bkParsed.length; i++) {
+          const s = bkParsed[i];
+          const scene = await db.createScene({
+            projectId: input.projectId, userId: ctx.user.id,
+            title: s.title || `Scene ${baseIdx + i + 1}`,
+            description: s.description, slugline: s.slugline,
+            locationType: s.locationType, locationDetail: s.locationDetail,
+            timeOfDay: s.timeOfDay, actNumber: s.actNumber, sequenceTitle: s.sequenceTitle,
+            dialogueText: s.dialogueText, actionDescription: s.actionDescription,
+            estimatedDuration: s.estimatedDuration, emotionalTone: s.emotionalTone,
+            vfxRequired: s.vfxRequired ?? false, productionStage: "development",
+            orderIndex: baseIdx + i,
+          } as any);
+          bkCreated.push(scene);
+        }
+        await db.logProjectActivity({ projectId: input.projectId, userId: ctx.user.id, action: "script_breakdown", targetType: "project", targetId: input.projectId, meta: { scenesCreated: bkCreated.length } });
+        return { scenes: bkCreated, count: bkCreated.length };
+      }),
   }),
 
   // ─── Soundtracks ───
@@ -8140,6 +8215,10 @@ Rules:
         const access = await db.getProjectAccess(input.projectId, ctx.user.id);
         if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "No access to this project" });
         const project = access.project;
+        // ── Credits: 5 credits per scene shot list generation ─────────────────
+        requireGenerationQuota(ctx.user);
+        try { await db.deductCredits(ctx.user.id, CREDIT_COSTS.shot_list_ai.cost, "shot_list_ai", `Shot List AI — Scene: ${(scene as any).title || input.sceneId}`); } catch (e: any) { if (e.message?.includes("INSUFFICIENT_CREDITS")) throw new TRPCError({ code: "FORBIDDEN", message: e.message }); }
+        const _shotCreditCost = CREDIT_COSTS.shot_list_ai.cost;
         const characters = await db.getProjectCharacters(input.projectId);
         const existingShots = await db.getSceneShots(input.sceneId);
         const existingCount = existingShots.length;
@@ -8164,7 +8243,13 @@ Generate a professional shot list with 3-8 shots. For each shot return a JSON ar
 [{ "shotNumber": "1A", "shotType": "WS", "cameraMovement": "Static", "lens": "35mm", "framing": "...", "action": "...", "dialogue": "...", "props": "...", "wardrobe": "...", "vfxNotes": "...", "lightingNotes": "...", "soundNotes": "...", "estimatedDuration": 8, "unit": "A Camera", "notes": "..." }]
 
 Return ONLY the JSON array, no other text.`;
-        const rawResult = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 2000 });
+        let rawResult: any;
+        try {
+          rawResult = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 2000 });
+        } catch (_shotLLMErr: any) {
+          try { await db.addCredits(ctx.user.id, _shotCreditCost, "shot_list_ai_refund", "Refund: Shot list LLM call failed"); } catch {}
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI shot list generation failed. Your 5 credits have been refunded." });
+        }
         const rawText = (rawResult.choices?.[0]?.message?.content as string) || "";
         let parsed: any[] = [];
         try {
@@ -8251,6 +8336,10 @@ Return ONLY the JSON array, no other text.`;
         const project = access.project;
         const scenes = await db.getProjectScenes(input.projectId);
         if (scenes.length < 2) return { issues: [], persisted: 0 };
+        // ── Credits: 5 credits for full-film continuity scan ──────────────────
+        requireGenerationQuota(ctx.user);
+        try { await db.deductCredits(ctx.user.id, CREDIT_COSTS.continuity_check_ai.cost, "continuity_check_ai", `Continuity Check AI — ${scenes.length} scenes`); } catch (e: any) { if (e.message?.includes("INSUFFICIENT_CREDITS")) throw new TRPCError({ code: "FORBIDDEN", message: e.message }); }
+        const _contCreditCost = CREDIT_COSTS.continuity_check_ai.cost;
         const sceneBlock = scenes.map((s: any, i: number) => `Scene ${i+1}: ${s.title || 'Untitled'} | Location: ${s.locationType || ''} ${s.locationDetail || ''} | Time: ${s.timeOfDay || ''} | Weather: ${s.weather || ''} | Characters: ${JSON.stringify(s.characterIds || [])} | Wardrobe: ${JSON.stringify(s.wardrobe || {})} | Props: ${JSON.stringify(s.props || [])}`).join('\n');
         const prompt = `You are a professional script supervisor checking continuity for the film "${project.title}".
 
@@ -8258,7 +8347,13 @@ SCENE BREAKDOWN:\n${sceneBlock}\n\nIdentify ALL continuity issues. For each issu
 [{ "sceneATitle": "...", "sceneBTitle": "...", "severity": "high|medium|low", "category": "wardrobe|props|lighting|character|location|timeline", "description": "...", "suggestion": "..." }]
 
 Return ONLY the JSON array.`;
-        const rawResult2 = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 3000 });
+        let rawResult2: any;
+        try {
+          rawResult2 = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 3000 });
+        } catch (_contLLMErr: any) {
+          try { await db.addCredits(ctx.user.id, _contCreditCost, "continuity_check_ai_refund", "Refund: Continuity check LLM call failed"); } catch {}
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI continuity check failed. Your 5 credits have been refunded." });
+        }
         const rawText2 = (rawResult2.choices?.[0]?.message?.content as string) || "";
         let parsed: any[] = [];
         try { const m = rawText2.match(/\[.*\]/s); parsed = m ? JSON.parse(m[0]) : []; } catch { parsed = []; }

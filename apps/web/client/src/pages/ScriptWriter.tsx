@@ -653,6 +653,17 @@ export default function ScriptWriter() {
     onError: (err) => toast.error(err.message),
   });
 
+  const [breakdownDialogOpen, setBreakdownDialogOpen] = useState(false);
+  const [breakdownReplaceExisting, setBreakdownReplaceExisting] = useState(false);
+  const breakdownMutation = trpc.script.breakdown.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Created ${data.count} scene${data.count !== 1 ? "s" : ""} from screenplay — go to Scenes to review`);
+      utils.scene.listByProject.invalidate({ projectId: pid });
+      setBreakdownDialogOpen(false);
+    },
+    onError: (err) => toast.error(err.message || "Breakdown failed"),
+  });
+
   // Load existing script
   useEffect(() => {
     if (existingScript) {
@@ -969,18 +980,40 @@ export default function ScriptWriter() {
             </Select>
 
             {scriptId && scriptId !== "new" && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteMutation.mutate({ id: parseInt(scriptId) })}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Delete script</TooltipContent>
-              </Tooltip>
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
+                      onClick={() => setBreakdownDialogOpen(true)}
+                      disabled={breakdownMutation.isPending}
+                    >
+                      {breakdownMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      <span className="hidden sm:inline">Break Down to Scenes</span>
+                      <span className="sm:hidden">Breakdown</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Parse this screenplay and auto-create scenes in your project</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteMutation.mutate({ id: parseInt(scriptId) })}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Delete script</TooltipContent>
+                </Tooltip>
+              </>
             )}
           </div>
         </div>
@@ -1221,6 +1254,64 @@ export default function ScriptWriter() {
           </div>
         </div>
       </div>
+
+      {/* Script Breakdown Dialog */}
+      <Dialog open={breakdownDialogOpen} onOpenChange={setBreakdownDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-400" />
+              Break Down Screenplay to Scenes
+            </DialogTitle>
+            <DialogDescription>
+              The AI will parse this screenplay and automatically create scene records in your project. Each scene will include location, time of day, act number, characters, and action notes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <div className="text-amber-400 text-xs leading-relaxed">
+                <strong>Important:</strong> This will create new scenes in your project. If you have existing scenes, they will be preserved unless you check the option below.
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="replaceExisting"
+                checked={breakdownReplaceExisting}
+                onChange={(e) => setBreakdownReplaceExisting(e.target.checked)}
+                className="rounded"
+              />
+              <Label htmlFor="replaceExisting" className="text-sm cursor-pointer">
+                Replace all existing scenes in this project
+              </Label>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setBreakdownDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-violet-600 hover:bg-violet-700"
+              onClick={() => {
+                if (!scriptId || scriptId === "new") return;
+                breakdownMutation.mutate({
+                  projectId: pid,
+                  scriptId: parseInt(scriptId),
+                  replaceExisting: breakdownReplaceExisting,
+                });
+              }}
+              disabled={breakdownMutation.isPending}
+            >
+              {breakdownMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              {breakdownMutation.isPending ? "Analyzing screenplay…" : "Create Scenes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

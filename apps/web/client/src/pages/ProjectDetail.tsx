@@ -144,6 +144,7 @@ export default function ProjectDetail() {
   const { data: characters } = trpc.character.listByProject.useQuery({ projectId });
   const { data: jobs } = trpc.generation.listJobs.useQuery({ projectId });
   const { data: soundtracks } = trpc.soundtrack.listByProject.useQuery({ projectId });
+  const { data: productionStatus } = trpc.project.getProductionStatus.useQuery({ projectId }, { refetchInterval: 30000 });
   const utils = trpc.useUtils();
 
   // Build playlist for MediaPlayer from all scenes with video
@@ -491,6 +492,41 @@ export default function ProjectDetail() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
+
+          {/* Production Status Banner */}
+          {productionStatus && (
+            <Card className="bg-card/50 border-violet-500/20">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium flex items-center gap-2">
+                    <Clapperboard className="h-4 w-4 text-violet-400" />
+                    Production Status
+                  </span>
+                  <span className="text-xs text-muted-foreground">{productionStatus.overallCompletion}% complete</span>
+                </div>
+                <Progress value={productionStatus.overallCompletion} className="h-1.5 mb-3" />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-violet-400">{productionStatus.scenes.completed}/{productionStatus.scenes.total}</div>
+                    <div className="text-[10px] text-muted-foreground">Scenes Generated</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-amber-400">{productionStatus.continuity.open}</div>
+                    <div className="text-[10px] text-muted-foreground">Continuity Issues</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-blue-400">{productionStatus.scenes.locked}</div>
+                    <div className="text-[10px] text-muted-foreground">Locked Scenes</div>
+                  </div>
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${productionStatus.shots.needsRetake > 0 ? 'text-amber-400' : 'text-green-400'}`}>{productionStatus.shots.needsRetake}</div>
+                    <div className="text-[10px] text-muted-foreground">Shots Need Retake</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card className="bg-card/50">
               <CardContent className="p-4">

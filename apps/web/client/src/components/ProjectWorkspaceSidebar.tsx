@@ -36,6 +36,11 @@ import {
   Circle,
   Clock,
   Loader2,
+  Brain,
+  Activity,
+  ListOrdered,
+  Layers2,
+  Camera,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -56,6 +61,7 @@ const PIPELINE_STAGES = [
       { label: "Overview", path: "", icon: Film },
       { label: "Story & Script", path: "/script", icon: FileText },
       { label: "Characters", path: "/characters", icon: Users },
+      { label: "Production Memory", path: "/memory", icon: Brain },
     ],
   },
   {
@@ -67,7 +73,7 @@ const PIPELINE_STAGES = [
     items: [
       { label: "Production Board", path: "/board", icon: Clapperboard },
       { label: "Storyboard", path: "/storyboard", icon: Layers },
-      { label: "Shot List", path: "/shot-list", icon: FileText },
+      { label: "Shot List", path: "/shot-list", icon: ListOrdered },
       { label: "Locations", path: "/locations", icon: MapPin },
       { label: "Mood Board", path: "/mood-board", icon: Palette },
       { label: "Budget", path: "/budget", icon: DollarSign },
@@ -81,7 +87,9 @@ const PIPELINE_STAGES = [
     bgColor: "bg-emerald-400/10",
     items: [
       { label: "Scenes", path: "/scenes", icon: Clapperboard },
+      { label: "Multi-Shot", path: "/multi-shot", icon: Layers2 },
       { label: "AI Casting", path: "/ai-casting", icon: Sparkles },
+      { label: "Live Action Plate", path: "/live-action-plate", icon: Camera },
       { label: "Dialogue Editor", path: "/dialogue", icon: FileText },
       { label: "Sound Effects", path: "/sound-effects", icon: Music },
     ],
@@ -98,6 +106,7 @@ const PIPELINE_STAGES = [
       { label: "VFX Suite", path: "/vfx-suite", icon: Wand2 },
       { label: "Continuity Check", path: "/continuity", icon: CheckCircle2 },
       { label: "Subtitles", path: "/subtitles", icon: FileText },
+      { label: "Activity Log", path: "/activity", icon: Activity },
     ],
   },
   {

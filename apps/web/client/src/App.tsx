@@ -94,6 +94,8 @@ const DirectorCut = lazy(() => import("./pages/DirectorCut"));
 const TrailerStudio = lazy(() => import("./pages/TrailerStudio"));
 const TVCommercial = lazy(() => import("./pages/TVCommercial"));
 const FundingDirectory = lazy(() => import("./pages/FundingDirectory"));
+const ProductionMemory = lazy(() => import("./pages/ProductionMemory"));
+const ActivityLog = lazy(() => import("./pages/ActivityLog"));
 
 // ─── Loading fallback ───
 function PageLoader() {
@@ -140,6 +142,8 @@ function GatedAICasting() { return <LazyPage><SubscriptionGate feature="AI Casti
 function GatedDirectorCut() { return <LazyPage><DirectorCut /></LazyPage>; }
 function GatedTrailerStudio() { return <LazyPage><SubscriptionGate feature="Trailer Studio" featureKey="canUseFullFilmGeneration" requiredTier="independent"><TrailerStudio /></SubscriptionGate></LazyPage>; }
 function GatedTVCommercial() { return <LazyPage><SubscriptionGate feature="TV Commercial Creator" featureKey="canUseAdPosterMaker" requiredTier="independent"><TVCommercial /></SubscriptionGate></LazyPage>; }
+function GatedProductionMemory() { return <LazyPage><ProductionMemory /></LazyPage>; }
+function GatedActivityLog() { return <LazyPage><ActivityLog /></LazyPage>; }
 
 function Router() {
   return (
@@ -199,6 +203,8 @@ function Router() {
       <Route path="/projects/:projectId/director-cut" component={GatedDirectorCut} />
       <Route path="/projects/:projectId/trailer-studio" component={GatedTrailerStudio} />
       <Route path="/projects/:projectId/tv-commercial" component={GatedTVCommercial} />
+      <Route path="/projects/:id/memory" component={GatedProductionMemory} />
+      <Route path="/projects/:projectId/activity" component={GatedActivityLog} />
 
       {/* Dashboard layout pages */}
       <Route>
