@@ -450,6 +450,75 @@ export async function recoverStuckScenes() {
   }
 }
 
+// ─── Recurring Watchdog (every 5 min) ────────────────────────────────────────────────────
+/**
+ * Independently scans for ALL stuck jobs regardless of whether the main
+ * polling loop ever touched them. Covers crash-recovery gaps where a job
+ * was submitted just before a crash and never polled.
+ *
+ * Criteria for "stuck":
+ *   - generationJobs.status = 'processing' AND updatedAt older than WATCHDOG_STUCK_THRESHOLD_MS
+ *   - OR scene.status = 'generating' with no active processing job
+ */
+const WATCHDOG_INTERVAL_MS = 5 * 60 * 1000;        // 5 minutes
+const WATCHDOG_STUCK_THRESHOLD_MS = 25 * 60 * 1000; // 25 min (above Runway 15m + Veo3 20m)
+
+async function runWatchdogCycle(): Promise<void> {
+  try {
+    const dbConn = await getDb();
+    if (!dbConn) return;
+
+    const cutoff = new Date(Date.now() - WATCHDOG_STUCK_THRESHOLD_MS);
+    const cutoffStr = cutoff.toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+
+    // 1. Force-fail generationJobs stuck in 'processing' beyond threshold
+    const stuckResult = await dbConn.execute(
+      sql.raw(`SELECT * FROM generationJobs WHERE status = 'processing' AND updatedAt < '${cutoffStr}' LIMIT 50`)
+    );
+    const stuckJobs = (stuckResult as any)[0] as any[];
+    if (stuckJobs && stuckJobs.length > 0) {
+      console.warn(`[Watchdog] ${stuckJobs.length} stuck job(s) beyond ${WATCHDOG_STUCK_THRESHOLD_MS / 60000}min — force-failing`);
+      for (const job of stuckJobs) {
+        const meta = job.metadata as any;
+        const ageMin = Math.round((Date.now() - new Date(job.updatedAt).getTime()) / 60000);
+        await dbConn.execute(sql.raw(
+          `UPDATE generationJobs SET status = 'failed', errorMessage = 'Watchdog: no progress for ${ageMin}min' WHERE id = ${job.id}`
+        ));
+        if (meta?.sceneId) {
+          await dbConn.execute(sql.raw(
+            `UPDATE scenes SET status = 'failed' WHERE id = ${meta.sceneId} AND status = 'generating'`
+          ));
+          console.warn(`[Watchdog] Force-failed job ${job.id}, reset scene ${meta.sceneId}`);
+        }
+      }
+    }
+
+    // 2. Reset orphaned scenes (generating but no active job)
+    const orphanResult = await dbConn.execute(sql.raw(`
+      SELECT s.id, s.updatedAt FROM scenes s
+      WHERE s.status = 'generating'
+      AND NOT EXISTS (
+        SELECT 1 FROM generationJobs j
+        WHERE j.sceneId = s.id AND j.status = 'processing'
+      )
+      AND s.updatedAt < '${cutoffStr}'
+    `));
+    const orphans = (orphanResult as any)[0] as any[];
+    if (orphans && orphans.length > 0) {
+      console.warn(`[Watchdog] ${orphans.length} orphaned scene(s) stuck in 'generating' — resetting to 'failed'`);
+      for (const scene of orphans) {
+        const ageMin = Math.round((Date.now() - new Date(scene.updatedAt).getTime()) / 60000);
+        await dbConn.execute(sql.raw(
+          `UPDATE scenes SET status = 'failed' WHERE id = ${scene.id}`
+        ));
+        console.warn(`[Watchdog] Reset orphaned scene ${scene.id} (age: ${ageMin}min)`);
+      }
+    }
+  } catch (err: any) {
+    console.error(`[Watchdog] Cycle error:`, err.message);
+  }
+}
+
 // ─── Start the Worker ───
 
 export function startVideoJobWorker() {
@@ -465,4 +534,11 @@ export function startVideoJobWorker() {
 
   // Also run immediately
   setTimeout(() => runWorkerCycle().catch(console.error), 2000);
+
+  // ── Recurring Watchdog: independent of main poll, catches never-polled jobs ──
+  setInterval(() => {
+    runWatchdogCycle().catch(console.error);
+  }, WATCHDOG_INTERVAL_MS);
+  setTimeout(() => runWatchdogCycle().catch(console.error), 30_000);
+  console.log(`[VideoWorker] Watchdog active (every ${WATCHDOG_INTERVAL_MS / 60000}min, threshold: ${WATCHDOG_STUCK_THRESHOLD_MS / 60000}min)`);
 }

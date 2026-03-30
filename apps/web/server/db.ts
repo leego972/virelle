@@ -25,6 +25,13 @@ import {
   InsertReferralCode, referralCodes,
   InsertReferralTracking, referralTracking,
   InsertProjectSample, projectSamples, ProjectSample,
+  InsertSceneReview, sceneReviews, SceneReview,
+  InsertSceneComment, sceneComments, SceneComment,
+  InsertProductionMemory, productionMemory, ProductionMemory,
+  InsertProjectActivityLog, projectActivityLog,
+  InsertShot, shots, Shot,
+  InsertContinuityIssue, continuityIssues, ContinuityIssue,
+  InsertSceneSnapshot, sceneSnapshots, SceneSnapshot,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1814,4 +1821,242 @@ export async function setFirstLoginExpiry(userId: number, openId: string): Promi
   } catch (err) {
     console.warn("[DB] setFirstLoginExpiry failed (non-critical):", err);
   }
+}
+
+// ─── Scene Reviews ────────────────────────────────────────────────────────────
+export async function getSceneReviews(sceneId: number): Promise<SceneReview[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sceneReviews).where(eq(sceneReviews.sceneId, sceneId)).orderBy(desc(sceneReviews.createdAt));
+}
+
+export async function getProjectReviews(projectId: number): Promise<SceneReview[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sceneReviews).where(eq(sceneReviews.projectId, projectId)).orderBy(desc(sceneReviews.createdAt));
+}
+
+export async function upsertSceneReview(data: InsertSceneReview): Promise<SceneReview> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // One review per reviewer per scene — upsert
+  const existing = await db.select().from(sceneReviews)
+    .where(and(eq(sceneReviews.sceneId, data.sceneId), eq(sceneReviews.reviewerId, data.reviewerId)))
+    .limit(1);
+  if (existing.length > 0) {
+    await db.update(sceneReviews).set({ status: data.status, note: data.note ?? null }).where(eq(sceneReviews.id, existing[0].id));
+    return (await db.select().from(sceneReviews).where(eq(sceneReviews.id, existing[0].id)))[0];
+  }
+  const result = await db.insert(sceneReviews).values(data);
+  return (await db.select().from(sceneReviews).where(eq(sceneReviews.id, result[0].insertId)))[0];
+}
+
+// ─── Scene Comments ───────────────────────────────────────────────────────────
+export async function getSceneComments(sceneId: number): Promise<SceneComment[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sceneComments).where(eq(sceneComments.sceneId, sceneId)).orderBy(asc(sceneComments.createdAt));
+}
+
+export async function getProjectComments(projectId: number): Promise<SceneComment[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sceneComments).where(eq(sceneComments.projectId, projectId)).orderBy(desc(sceneComments.createdAt));
+}
+
+export async function createSceneComment(data: InsertSceneComment): Promise<SceneComment> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(sceneComments).values(data);
+  return (await db.select().from(sceneComments).where(eq(sceneComments.id, result[0].insertId)))[0];
+}
+
+export async function resolveSceneComment(id: number, resolvedBy: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(sceneComments).set({ resolved: true, resolvedBy }).where(eq(sceneComments.id, id));
+}
+
+export async function deleteSceneComment(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(sceneComments).where(eq(sceneComments.id, id));
+}
+
+// ─── Production Memory ────────────────────────────────────────────────────────
+export async function getProductionMemory(projectId: number): Promise<ProductionMemory[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(productionMemory).where(eq(productionMemory.projectId, projectId)).orderBy(asc(productionMemory.entityType), asc(productionMemory.entityName));
+}
+
+export async function createProductionMemoryEntry(data: InsertProductionMemory): Promise<ProductionMemory> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(productionMemory).values(data);
+  return (await db.select().from(productionMemory).where(eq(productionMemory.id, result[0].insertId)))[0];
+}
+
+export async function updateProductionMemoryEntry(id: number, data: Partial<InsertProductionMemory>): Promise<ProductionMemory> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(productionMemory).set(data).where(eq(productionMemory.id, id));
+  return (await db.select().from(productionMemory).where(eq(productionMemory.id, id)))[0];
+}
+
+export async function deleteProductionMemoryEntry(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(productionMemory).where(eq(productionMemory.id, id));
+}
+
+// ─── Project Activity Log ─────────────────────────────────────────────────────
+export async function logProjectActivity(data: InsertProjectActivityLog): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(projectActivityLog).values(data);
+  } catch (err) {
+    console.warn("[DB] logProjectActivity failed (non-critical):", err);
+  }
+}
+
+export async function getProjectActivityLog(projectId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(projectActivityLog).where(eq(projectActivityLog.projectId, projectId)).orderBy(desc(projectActivityLog.createdAt)).limit(limit);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRODUCTION-GRADE ADDITIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Project Access (owner OR accepted collaborator) ──────────────────────────
+export async function getProjectAccess(projectId: number, userId: number): Promise<{
+  project: typeof projects.$inferSelect;
+  role: "owner" | "director" | "producer" | "editor" | "viewer";
+} | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const owned = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.userId, userId))).limit(1);
+  if (owned[0]) return { project: owned[0], role: "owner" };
+  const collab = await db.select().from(collaborators).where(
+    and(eq(collaborators.projectId, projectId), eq(collaborators.userId, userId), eq(collaborators.status, "accepted"))
+  ).limit(1);
+  if (!collab[0]) return null;
+  const proj = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+  if (!proj[0]) return null;
+  return { project: proj[0], role: (collab[0].role as "director" | "producer" | "editor" | "viewer") };
+}
+
+export async function getUserProjectRole(projectId: number, userId: number): Promise<"owner" | "director" | "producer" | "editor" | "viewer" | null> {
+  const access = await getProjectAccess(projectId, userId);
+  return access ? access.role : null;
+}
+
+// ─── Persistent Shot Records ──────────────────────────────────────────────────
+export async function upsertShot(data: InsertShot): Promise<Shot> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (data.id) {
+    await db.update(shots).set({ ...data, updatedAt: new Date() }).where(eq(shots.id, data.id));
+    return (await db.select().from(shots).where(eq(shots.id, data.id)))[0];
+  }
+  const result = await db.insert(shots).values(data);
+  return (await db.select().from(shots).where(eq(shots.id, result[0].insertId)))[0];
+}
+
+export async function getProjectShots(projectId: number): Promise<Shot[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(shots).where(eq(shots.projectId, projectId)).orderBy(shots.sceneId, shots.orderIndex);
+}
+
+export async function getSceneShots(sceneId: number): Promise<Shot[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(shots).where(eq(shots.sceneId, sceneId)).orderBy(shots.orderIndex);
+}
+
+export async function updateShotStatus(id: number, status: "pending" | "completed" | "cut" | "needs_retake"): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(shots).set({ status, updatedAt: new Date() }).where(eq(shots.id, id));
+}
+
+export async function deleteShot(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(shots).where(eq(shots.id, id));
+}
+
+// ─── Persistent Continuity Issues ────────────────────────────────────────────
+export async function createContinuityIssue(data: InsertContinuityIssue): Promise<ContinuityIssue> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(continuityIssues).values(data);
+  return (await db.select().from(continuityIssues).where(eq(continuityIssues.id, result[0].insertId)))[0];
+}
+
+export async function getProjectContinuityIssues(projectId: number): Promise<ContinuityIssue[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(continuityIssues).where(eq(continuityIssues.projectId, projectId)).orderBy(desc(continuityIssues.createdAt));
+}
+
+export async function resolveContinuityIssue(id: number, resolvedBy: number, resolution: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(continuityIssues).set({ status: "resolved", resolvedBy, resolution, resolvedAt: new Date() }).where(eq(continuityIssues.id, id));
+}
+
+export async function dismissContinuityIssue(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(continuityIssues).set({ status: "dismissed" }).where(eq(continuityIssues.id, id));
+}
+
+export async function deleteContinuityIssue(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(continuityIssues).where(eq(continuityIssues.id, id));
+}
+
+// ─── Scene Snapshots (version history) ───────────────────────────────────────
+export async function createSceneSnapshot(sceneId: number, projectId: number, userId: number, label?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const scene = await getSceneById(sceneId);
+  if (!scene) return;
+  const { id: _id, createdAt: _c, updatedAt: _u, ...snapshotData } = scene;
+  await db.insert(sceneSnapshots).values({ sceneId, projectId, snapshotData: snapshotData as any, createdBy: userId, label: label || null });
+}
+
+export async function getSceneSnapshots(sceneId: number): Promise<SceneSnapshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sceneSnapshots).where(eq(sceneSnapshots.sceneId, sceneId)).orderBy(desc(sceneSnapshots.createdAt)).limit(20);
+}
+
+export async function restoreSceneSnapshot(snapshotId: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const snap = await db.select().from(sceneSnapshots).where(eq(sceneSnapshots.id, snapshotId)).limit(1);
+  if (!snap[0]) throw new Error("Snapshot not found");
+  const { sceneId, snapshotData, projectId } = snap[0];
+  await createSceneSnapshot(sceneId, projectId, userId, "Auto-save before restore");
+  await db.update(scenes).set({ ...(snapshotData as any), updatedAt: new Date() }).where(eq(scenes.id, sceneId));
+}
+
+// ─── Production Memory: scene linkage ────────────────────────────────────────
+export async function getMemoryEntriesForScene(sceneId: number): Promise<ProductionMemory[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(productionMemory).where(eq(productionMemory.sceneId, sceneId));
+}
+
+export async function linkMemoryEntryToScene(memoryId: number, sceneId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(productionMemory).set({ sceneId }).where(eq(productionMemory.id, memoryId));
 }

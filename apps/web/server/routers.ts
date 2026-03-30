@@ -490,6 +490,92 @@ export const appRouter = router({
         await db.deleteProject(input.id, ctx.user.id);
         return { success: true };
       }),
+
+    // ── Production Status: critical-path dashboard data ──────────────────────────────────
+    getProductionStatus: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "No access to this project" });
+        const project = access.project;
+        const [scenes, shots, continuityIssuesList, collaborators, activityLog] = await Promise.all([
+          db.getProjectScenes(input.projectId),
+          db.getProjectShots(input.projectId),
+          db.getProjectContinuityIssues(input.projectId),
+          db.listCollaboratorsByProject(input.projectId),
+          db.getProjectActivityLog(input.projectId, 20),
+        ]);
+
+        // Scene completion metrics
+        const totalScenes = scenes.length;
+        const completedScenes = scenes.filter((s: any) => s.status === "completed").length;
+        const generatingScenes = scenes.filter((s: any) => s.status === "generating").length;
+        const failedScenes = scenes.filter((s: any) => s.status === "failed").length;
+        const lockedScenes = scenes.filter((s: any) => s.productionStage === "locked").length;
+        const draftScenes = scenes.filter((s: any) => s.status === "draft" || !s.status).length;
+
+        // Shot metrics
+        const totalShots = shots.length;
+        const completedShots = shots.filter((s: any) => s.status === "completed").length;
+        const pendingShots = shots.filter((s: any) => s.status === "pending").length;
+        const cutShots = shots.filter((s: any) => s.status === "cut").length;
+        const retakeShots = shots.filter((s: any) => s.status === "needs_retake").length;
+        const totalEstimatedDuration = shots.reduce((acc: number, s: any) => acc + (s.estimatedDuration || 0), 0);
+
+        // Continuity
+        const openIssues = continuityIssuesList.filter((i: any) => i.status === "open");
+        const highSeverityIssues = openIssues.filter((i: any) => i.severity === "high");
+
+        // Collaborators
+        const acceptedCollaborators = collaborators.filter((c: any) => c.status === "accepted");
+        const pendingInvites = collaborators.filter((c: any) => c.status === "pending");
+
+        // Act/sequence breakdown
+        const actBreakdown: Record<number, { total: number; completed: number; locked: number }> = {};
+        for (const scene of scenes as any[]) {
+          const act = scene.actNumber || 1;
+          if (!actBreakdown[act]) actBreakdown[act] = { total: 0, completed: 0, locked: 0 };
+          actBreakdown[act].total++;
+          if (scene.status === "completed") actBreakdown[act].completed++;
+          if (scene.productionStage === "locked") actBreakdown[act].locked++;
+        }
+
+        // Production stage breakdown
+        const stageBreakdown: Record<string, number> = {};
+        for (const scene of scenes as any[]) {
+          const stage = scene.productionStage || "development";
+          stageBreakdown[stage] = (stageBreakdown[stage] || 0) + 1;
+        }
+
+        // Overall completion percentage (weighted: scenes 60%, shots 40%)
+        const sceneCompletion = totalScenes > 0 ? (completedScenes / totalScenes) * 100 : 0;
+        const shotCompletion = totalShots > 0 ? (completedShots / totalShots) * 100 : 0;
+        const overallCompletion = totalShots > 0
+          ? Math.round(sceneCompletion * 0.6 + shotCompletion * 0.4)
+          : Math.round(sceneCompletion);
+
+        // Critical path: what's blocking completion
+        const blockers: string[] = [];
+        if (failedScenes > 0) blockers.push(`${failedScenes} scene(s) failed generation`);
+        if (highSeverityIssues.length > 0) blockers.push(`${highSeverityIssues.length} high-severity continuity issue(s) unresolved`);
+        if (retakeShots > 0) blockers.push(`${retakeShots} shot(s) need retake`);
+        if (generatingScenes > 0) blockers.push(`${generatingScenes} scene(s) currently generating`);
+
+        return {
+          role: access.role,
+          project: { id: project.id, title: project.title, status: project.status, genre: project.genre },
+          scenes: { total: totalScenes, completed: completedScenes, generating: generatingScenes, failed: failedScenes, draft: draftScenes, locked: lockedScenes },
+          shots: { total: totalShots, completed: completedShots, pending: pendingShots, cut: cutShots, needsRetake: retakeShots, estimatedDurationSeconds: Math.round(totalEstimatedDuration) },
+          continuity: { open: openIssues.length, highSeverity: highSeverityIssues.length, total: continuityIssuesList.length },
+          collaborators: { accepted: acceptedCollaborators.length, pending: pendingInvites.length },
+          actBreakdown,
+          stageBreakdown,
+          overallCompletion,
+          blockers,
+          recentActivity: activityLog,
+        };
+      }),
+
     // Admin only: list all projects across all users
     adminListAll: adminProcedure
       .input(z.object({
@@ -1185,8 +1271,12 @@ export const appRouter = router({
         productionStage: z.enum(["development","pre-production","production","post-production","locked"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // ── COLLABORATOR-AWARE ACCESS CHECK ──────────────────────────────────
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this project" });
+        if (access.role === "viewer") throw new TRPCError({ code: "FORBIDDEN", message: "Viewers cannot create scenes" });
         // Content moderation scan on scene description and dialogue
-        const scanText = [input.title, input.description, input.dialogueText, input.aiPromptOverride].filter(Boolean).join(' ');
+        const scanText = [input.title, input.description, (input as any).dialogueText, (input as any).aiPromptOverride].filter(Boolean).join(' ');
         if (scanText.trim()) {
           const modResult = scanContent(scanText);
           if (modResult.flagged) {
@@ -1203,6 +1293,14 @@ export const appRouter = router({
             }
           }
         }
+        // ── AUDIT LOG ────────────────────────────────────────────────────────
+        db.logProjectActivity({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "scene_create",
+          entityType: "scene",
+          meta: { title: input.title, role: access.role },
+        }).catch(() => {});
         return db.createScene(input as any);
       }),
     update: creationProcedure
@@ -1328,8 +1426,17 @@ export const appRouter = router({
        .mutation(async ({ ctx, input }) => {
         const scene = await db.getSceneById(input.id);
         if (!scene) throw new TRPCError({ code: "NOT_FOUND", message: "Scene not found" });
-        const project = await db.getProjectById(scene.projectId, ctx.user.id);
-        if (!project) throw new TRPCError({ code: "NOT_FOUND", message: "Scene not found" });
+        // ── COLLABORATOR-AWARE ACCESS CHECK ──────────────────────────────────
+        const access = await db.getProjectAccess(scene.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this project" });
+        // ── ROLE GUARD: viewers cannot mutate ────────────────────────────────
+        if (access.role === "viewer") throw new TRPCError({ code: "FORBIDDEN", message: "Viewers cannot edit scenes" });
+        // ── PICTURE LOCK GUARD ───────────────────────────────────────────────
+        if ((scene as any).productionStage === "locked" && access.role !== "owner" && access.role !== "director") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "This scene is picture-locked. Only the director or project owner can modify it." });
+        }
+        // ── AUTO-SNAPSHOT before overwrite ───────────────────────────────────
+        db.createSceneSnapshot(input.id, scene.projectId, ctx.user.id, "Auto-save before edit").catch(() => {});
         // Enforce Pro-only features
         if (input.multiShotEnabled) requireFeature(ctx.user, "canUseMultiShotSequencer", "Multi-Shot Sequencer");
         if (input.liveActionPlateUrl) requireFeature(ctx.user, "canUseLiveActionPlate", "Live Action Plate");
@@ -1342,20 +1449,22 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const scene = await db.getSceneById(input.id);
         if (!scene) throw new TRPCError({ code: "NOT_FOUND", message: "Scene not found" });
-        const project = await db.getProjectById(scene.projectId, ctx.user.id);
-        if (!project) throw new TRPCError({ code: "NOT_FOUND", message: "Scene not found" });
+        const access = await db.getProjectAccess(scene.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this project" });
+        if (access.role === "viewer") throw new TRPCError({ code: "FORBIDDEN", message: "Viewers cannot delete scenes" });
+        if ((scene as any).productionStage === "locked") throw new TRPCError({ code: "FORBIDDEN", message: "Cannot delete a picture-locked scene" });
         await db.deleteScene(input.id);
         return { success: true };
       }),
-
     reorder: protectedProcedure
       .input(z.object({
         projectId: z.number(),
         sceneIds: z.array(z.number()),
       }))
       .mutation(async ({ ctx, input }) => {
-        const project = await db.getProjectById(input.projectId, ctx.user.id);
-        if (!project) throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this project" });
+        if (access.role === "viewer") throw new TRPCError({ code: "FORBIDDEN", message: "Viewers cannot reorder scenes" });
         await db.reorderScenes(input.projectId, input.sceneIds);
         return { success: true };
       }),
@@ -1581,8 +1690,14 @@ export const appRouter = router({
         // Credits: duration-scaled deduction (≤15s=3cr, 16-45s=5cr, 46-90s=7cr, >90s=10cr)
         const videoCredits = getVideoCredits(Math.max(10, scene.duration || 45), false);
         try { await db.deductCredits(ctx.user.id, videoCredits, "generate_scene_video", `Video for scene ${input.sceneId} (${scene.duration || 45}s)`); } catch (e: any) { if (e.message?.includes("INSUFFICIENT_CREDITS")) throw new TRPCError({ code: "FORBIDDEN", message: e.message }); }
-        const project = await db.getProjectById(scene.projectId, ctx.user.id);
-        if (!project) throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+        // ── COLLABORATOR-AWARE ACCESS CHECK ─────────────────────────────────
+        const genAccess = await db.getProjectAccess(scene.projectId, ctx.user.id);
+        if (!genAccess) throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this project" });
+        if (genAccess.role === "viewer") throw new TRPCError({ code: "FORBIDDEN", message: "Viewers cannot generate videos" });
+        if ((scene as any).productionStage === "locked" && genAccess.role !== "owner" && genAccess.role !== "director") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "This scene is picture-locked. Only the director or project owner can regenerate it." });
+        }
+        const project = genAccess.project;
         const characters = await db.getProjectCharacters(project.id);
         const userTier = getEffectiveTier(ctx.user) as QualityTier;
         const visualDNA = buildVisualDNA(project, characters, userTier);
@@ -5294,13 +5409,45 @@ Generate a detailed production budget estimate.`,
       .input(z.object({
         id: z.number(),
         role: z.enum(["viewer", "editor", "producer", "director"]),
+        projectId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Only the project owner can change collaborator roles
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access || access.role !== "owner") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only the project owner can change collaborator roles" });
+        }
+        db.logProjectActivity({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "collaborator_role_change",
+          entityType: "collaborator",
+          entityId: input.id,
+          meta: { newRole: input.role },
+        }).catch(() => {});
         return db.updateCollaborator(input.id, { role: input.role });
       }),
     remove: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.number(), projectId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        // Only the project owner or the collaborator themselves can remove
+        const collabs = await db.listCollaboratorsByProject(input.projectId);
+        const target = collabs.find((c: any) => c.id === input.id);
+        if (target) {
+          const isOwner = (await db.getProjectAccess(input.projectId, ctx.user.id))?.role === "owner";
+          const isSelf = target.userId === ctx.user.id;
+          if (!isOwner && !isSelf) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Only the project owner or the collaborator themselves can remove a collaborator" });
+          }
+          db.logProjectActivity({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "collaborator_removed",
+            entityType: "collaborator",
+            entityId: input.id,
+            meta: { collaboratorEmail: target.email, removedBy: ctx.user.id },
+          }).catch(() => {});
+        }
         await db.deleteCollaborator(input.id);
         return { success: true };
       }),
@@ -7759,6 +7906,413 @@ Rules:
         subscriptionCurrentPeriodEnd: user.subscriptionCurrentPeriodEnd || null,
       };
     }),
+  }),
+
+  // ─── Scene Reviews ──────────────────────────────────────────────────────────
+  reviews: router({
+    getForScene: protectedProcedure
+      .input(z.object({ sceneId: z.number(), projectId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getSceneReviews(input.sceneId);
+      }),
+    getForProject: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getProjectReviews(input.projectId);
+      }),
+    submit: protectedProcedure
+      .input(z.object({
+        sceneId: z.number(),
+        projectId: z.number(),
+        status: z.enum(["pending", "approved", "changes_requested", "rejected"]),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const user = ctx.user as any;
+        const review = await db.upsertSceneReview({
+          sceneId: input.sceneId,
+          projectId: input.projectId,
+          reviewerId: user.id,
+          reviewerName: user.name || user.email || "Unknown",
+          status: input.status,
+          note: input.note ?? null,
+        });
+        await db.logProjectActivity({
+          projectId: input.projectId,
+          userId: user.id,
+          userName: user.name || user.email,
+          action: `review_${input.status}`,
+          targetType: "scene",
+          targetId: input.sceneId,
+          meta: { note: input.note },
+        });
+        return review;
+      }),
+  }),
+
+  // ─── Scene Comments ──────────────────────────────────────────────────────────
+  comments: router({
+    getForScene: protectedProcedure
+      .input(z.object({ sceneId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getSceneComments(input.sceneId);
+      }),
+    getForProject: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getProjectComments(input.projectId);
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        sceneId: z.number(),
+        projectId: z.number(),
+        body: z.string().min(1).max(4000),
+        parentId: z.number().optional(),
+        timecode: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const user = ctx.user as any;
+        const comment = await db.createSceneComment({
+          sceneId: input.sceneId,
+          projectId: input.projectId,
+          authorId: user.id,
+          authorName: user.name || user.email || "Unknown",
+          body: input.body,
+          parentId: input.parentId ?? null,
+          timecode: input.timecode ?? null,
+          resolved: false,
+        });
+        await db.logProjectActivity({
+          projectId: input.projectId,
+          userId: user.id,
+          userName: user.name || user.email,
+          action: "comment_added",
+          targetType: "scene",
+          targetId: input.sceneId,
+          meta: { body: input.body.slice(0, 100) },
+        });
+        return comment;
+      }),
+    resolve: protectedProcedure
+      .input(z.object({ commentId: z.number(), projectId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const user = ctx.user as any;
+        await db.resolveSceneComment(input.commentId, user.id);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ commentId: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteSceneComment(input.commentId);
+        return { success: true };
+      }),
+  }),
+
+  // ─── Production Memory ───────────────────────────────────────────────────────
+  productionMemory: router({
+    getForProject: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getProductionMemory(input.projectId);
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        entityType: z.enum(["character", "location", "prop", "wardrobe", "style_note"]),
+        entityName: z.string().min(1).max(255),
+        entityId: z.number().optional(),
+        sceneId: z.number().optional(),
+        description: z.string().optional(),
+        imageUrl: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const user = ctx.user as any;
+        const entry = await db.createProductionMemoryEntry({
+          projectId: input.projectId,
+          entityType: input.entityType,
+          entityName: input.entityName,
+          entityId: input.entityId ?? null,
+          sceneId: input.sceneId ?? null,
+          description: input.description ?? null,
+          imageUrl: input.imageUrl ?? null,
+          notes: input.notes ?? null,
+        });
+        await db.logProjectActivity({
+          projectId: input.projectId,
+          userId: user.id,
+          userName: user.name || user.email,
+          action: "memory_created",
+          targetType: input.entityType,
+          targetId: entry.id,
+          meta: { entityName: input.entityName },
+        });
+        return entry;
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        projectId: z.number(),
+        entityName: z.string().min(1).max(255).optional(),
+        description: z.string().optional(),
+        imageUrl: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, projectId, ...data } = input;
+        return db.updateProductionMemoryEntry(id, data);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteProductionMemoryEntry(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ─── Project Activity Log ────────────────────────────────────────────────────
+  activityLog: router({
+    getForProject: protectedProcedure
+      .input(z.object({ projectId: z.number(), limit: z.number().min(1).max(200).default(50) }))
+      .query(async ({ input }) => {
+        return db.getProjectActivityLog(input.projectId, input.limit);
+      }),
+  }),
+
+  // ─── Persistent Shot List ─────────────────────────────────────────────────────
+  shots: router({
+    getForProject: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ input }) => db.getProjectShots(input.projectId)),
+    getForScene: protectedProcedure
+      .input(z.object({ sceneId: z.number() }))
+      .query(async ({ input }) => db.getSceneShots(input.sceneId)),
+    upsert: creationProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        projectId: z.number(),
+        sceneId: z.number(),
+        orderIndex: z.number().optional(),
+        shotNumber: z.string().max(32).optional(),
+        shotType: z.string().max(64).optional(),
+        cameraMovement: z.string().max(64).optional(),
+        lens: z.string().max(64).optional(),
+        frameRate: z.string().max(16).optional(),
+        aperture: z.string().max(16).optional(),
+        cameraBody: z.string().max(128).optional(),
+        framing: z.string().optional(),
+        action: z.string().optional(),
+        dialogue: z.string().optional(),
+        props: z.string().optional(),
+        wardrobe: z.string().optional(),
+        vfxNotes: z.string().optional(),
+        lightingNotes: z.string().optional(),
+        soundNotes: z.string().optional(),
+        estimatedDuration: z.number().optional(),
+        unit: z.string().max(32).optional(),
+        status: z.enum(["pending", "completed", "cut", "needs_retake"]).optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "No access to this project" });
+        if (access.role === "viewer") throw new TRPCError({ code: "FORBIDDEN", message: "Viewers cannot edit shot lists" });
+        return db.upsertShot({ ...input, createdBy: ctx.user.id } as any);
+      }),
+    updateStatus: creationProcedure
+      .input(z.object({ id: z.number(), status: z.enum(["pending", "completed", "cut", "needs_retake"]) }))
+      .mutation(async ({ input }) => {
+        await db.updateShotStatus(input.id, input.status);
+        return { success: true };
+      }),
+    delete: creationProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteShot(input.id);
+        return { success: true };
+      }),
+    generateForScene: creationProcedure
+      .input(z.object({ sceneId: z.number(), projectId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        rateLimitAI(ctx.user.id);
+        const scene = await db.getSceneById(input.sceneId);
+        if (!scene) throw new TRPCError({ code: "NOT_FOUND", message: "Scene not found" });
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "No access to this project" });
+        const project = access.project;
+        const characters = await db.getProjectCharacters(input.projectId);
+        const existingShots = await db.getSceneShots(input.sceneId);
+        const existingCount = existingShots.length;
+        const prompt = `You are a professional 1st Assistant Director creating a detailed shot list for a film scene.
+
+PROJECT: ${project.title} (${project.genre || "Drama"}, ${project.targetAudience || "General"})
+SCENE: ${(scene as any).title || "Untitled"}
+DESCRIPTION: ${(scene as any).description || ""}
+CAMERA ANGLE: ${(scene as any).cameraAngle || ""}
+CAMERA MOVEMENT: ${(scene as any).cameraMovement || ""}
+LENS: ${(scene as any).lensType || ""}
+SHOT TYPE: ${(scene as any).shotType || ""}
+LOCATION: ${(scene as any).locationType || ""} — ${(scene as any).locationDetail || ""}
+CHARACTERS: ${characters.map((c: any) => c.name).join(", ") || "None"}
+DIALOGUE: ${(scene as any).dialogueText || ""}
+ACTION: ${(scene as any).actionDescription || ""}
+PROPS: ${JSON.stringify((scene as any).props || [])}
+WARDROBE: ${JSON.stringify((scene as any).wardrobe || {})}
+VFX: ${JSON.stringify((scene as any).visualEffects || [])}
+
+Generate a professional shot list with 3-8 shots. For each shot return a JSON array:
+[{ "shotNumber": "1A", "shotType": "WS", "cameraMovement": "Static", "lens": "35mm", "framing": "...", "action": "...", "dialogue": "...", "props": "...", "wardrobe": "...", "vfxNotes": "...", "lightingNotes": "...", "soundNotes": "...", "estimatedDuration": 8, "unit": "A Camera", "notes": "..." }]
+
+Return ONLY the JSON array, no other text.`;
+        const raw = await invokeLLM([{ role: "user", content: prompt }], { temperature: 0.3, maxTokens: 2000 });
+        let parsed: any[] = [];
+        try {
+          const match = raw.match(/\[.*\]/s);
+          parsed = match ? JSON.parse(match[0]) : [];
+        } catch { parsed = []; }
+        const saved = [];
+        for (let i = 0; i < parsed.length; i++) {
+          const s = parsed[i];
+          const shot = await db.upsertShot({
+            projectId: input.projectId,
+            sceneId: input.sceneId,
+            orderIndex: existingCount + i,
+            shotNumber: s.shotNumber || `${existingCount + i + 1}`,
+            shotType: s.shotType,
+            cameraMovement: s.cameraMovement,
+            lens: s.lens,
+            framing: s.framing,
+            action: s.action,
+            dialogue: s.dialogue,
+            props: s.props,
+            wardrobe: s.wardrobe,
+            vfxNotes: s.vfxNotes,
+            lightingNotes: s.lightingNotes,
+            soundNotes: s.soundNotes,
+            estimatedDuration: s.estimatedDuration,
+            unit: s.unit || "A Camera",
+            notes: s.notes,
+            status: "pending",
+            createdBy: ctx.user.id,
+          });
+          saved.push(shot);
+        }
+        return { shots: saved, count: saved.length };
+      }),
+  }),
+
+  // ─── Persistent Continuity Issues ────────────────────────────────────────────
+  continuityIssues: router({
+    getForProject: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ input }) => db.getProjectContinuityIssues(input.projectId)),
+    create: creationProcedure
+      .input(z.object({
+        projectId: z.number(),
+        sceneAId: z.number().optional(),
+        sceneBId: z.number().optional(),
+        severity: z.enum(["high", "medium", "low"]),
+        category: z.string().max(64).optional(),
+        description: z.string().min(1),
+        suggestion: z.string().optional(),
+        source: z.enum(["ai", "manual"]).default("manual"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "No access" });
+        return db.createContinuityIssue({ ...input, status: "open" } as any);
+      }),
+    resolve: creationProcedure
+      .input(z.object({ id: z.number(), resolution: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        await db.resolveContinuityIssue(input.id, ctx.user.id, input.resolution);
+        return { success: true };
+      }),
+    dismiss: creationProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.dismissContinuityIssue(input.id);
+        return { success: true };
+      }),
+    delete: creationProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteContinuityIssue(input.id);
+        return { success: true };
+      }),
+    // Run AI check and persist results
+    runAndPersist: creationProcedure
+      .input(z.object({ projectId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        rateLimitHeavyAI(ctx.user.id);
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "No access" });
+        const project = access.project;
+        const scenes = await db.getProjectScenes(input.projectId);
+        if (scenes.length < 2) return { issues: [], persisted: 0 };
+        const sceneBlock = scenes.map((s: any, i: number) => `Scene ${i+1}: ${s.title || 'Untitled'} | Location: ${s.locationType || ''} ${s.locationDetail || ''} | Time: ${s.timeOfDay || ''} | Weather: ${s.weather || ''} | Characters: ${JSON.stringify(s.characterIds || [])} | Wardrobe: ${JSON.stringify(s.wardrobe || {})} | Props: ${JSON.stringify(s.props || [])}`).join('\n');
+        const prompt = `You are a professional script supervisor checking continuity for the film "${project.title}".
+
+SCENE BREAKDOWN:\n${sceneBlock}\n\nIdentify ALL continuity issues. For each issue return a JSON array:
+[{ "sceneATitle": "...", "sceneBTitle": "...", "severity": "high|medium|low", "category": "wardrobe|props|lighting|character|location|timeline", "description": "...", "suggestion": "..." }]
+
+Return ONLY the JSON array.`;
+        const raw = await invokeLLM([{ role: "user", content: prompt }], { temperature: 0.2, maxTokens: 3000 });
+        let parsed: any[] = [];
+        try { const m = raw.match(/\[.*\]/s); parsed = m ? JSON.parse(m[0]) : []; } catch { parsed = []; }
+        const sceneByTitle = new Map(scenes.map((s: any) => [s.title?.toLowerCase(), s]));
+        let persisted = 0;
+        const issues = [];
+        for (const issue of parsed) {
+          const sceneA = sceneByTitle.get(issue.sceneATitle?.toLowerCase());
+          const sceneB = sceneByTitle.get(issue.sceneBTitle?.toLowerCase());
+          const created = await db.createContinuityIssue({
+            projectId: input.projectId,
+            sceneAId: sceneA?.id ?? null,
+            sceneBId: sceneB?.id ?? null,
+            severity: issue.severity || "medium",
+            category: issue.category,
+            description: issue.description,
+            suggestion: issue.suggestion,
+            status: "open",
+            source: "ai",
+          } as any);
+          issues.push(created);
+          persisted++;
+        }
+        return { issues, persisted };
+      }),
+  }),
+
+  // ─── Scene Version History ────────────────────────────────────────────────────
+  sceneHistory: router({
+    getSnapshots: protectedProcedure
+      .input(z.object({ sceneId: z.number() }))
+      .query(async ({ input }) => db.getSceneSnapshots(input.sceneId)),
+    saveSnapshot: creationProcedure
+      .input(z.object({ sceneId: z.number(), projectId: z.number(), label: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const access = await db.getProjectAccess(input.projectId, ctx.user.id);
+        if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "No access" });
+        await db.createSceneSnapshot(input.sceneId, input.projectId, ctx.user.id, input.label);
+        return { success: true };
+      }),
+    restore: creationProcedure
+      .input(z.object({ snapshotId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.restoreSceneSnapshot(input.snapshotId, ctx.user.id);
+        return { success: true };
+      }),
+  }),
+
+  // ─── Project Access / Role ────────────────────────────────────────────────────
+  projectAccess: router({
+    getMyRole: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const role = await db.getUserProjectRole(input.projectId, ctx.user.id);
+        return { role };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

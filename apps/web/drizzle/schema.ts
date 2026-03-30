@@ -1121,3 +1121,137 @@ export const filmScoreCues = mysqlTable("film_score_cues", {
 });
 export type FilmScoreCue = typeof filmScoreCues.$inferSelect;
 export type InsertFilmScoreCue = typeof filmScoreCues.$inferInsert;
+
+// ─── Scene Review States ──────────────────────────────────────────────────────
+export const sceneReviews = mysqlTable("scene_reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  sceneId: int("sceneId").notNull(),
+  projectId: int("projectId").notNull(),
+  reviewerId: int("reviewerId").notNull(),
+  reviewerName: varchar("reviewerName", { length: 255 }),
+  status: mysqlEnum("reviewStatus", ["pending", "approved", "changes_requested", "rejected"]).default("pending").notNull(),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type SceneReview = typeof sceneReviews.$inferSelect;
+export type InsertSceneReview = typeof sceneReviews.$inferInsert;
+
+// ─── Scene Comments ───────────────────────────────────────────────────────────
+export const sceneComments = mysqlTable("scene_comments", {
+  id: int("id").autoincrement().primaryKey(),
+  sceneId: int("sceneId").notNull(),
+  projectId: int("projectId").notNull(),
+  authorId: int("authorId").notNull(),
+  authorName: varchar("authorName", { length: 255 }),
+  parentId: int("parentId"),
+  body: text("body").notNull(),
+  timecode: float("timecode"),
+  resolved: boolean("resolved").default(false).notNull(),
+  resolvedBy: int("resolvedBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type SceneComment = typeof sceneComments.$inferSelect;
+export type InsertSceneComment = typeof sceneComments.$inferInsert;
+
+// ─── Production Memory ────────────────────────────────────────────────────────
+export const productionMemory = mysqlTable("production_memory", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  entityType: mysqlEnum("entityType", ["character", "location", "prop", "wardrobe", "style_note"]).notNull(),
+  entityId: int("entityId"),
+  entityName: varchar("entityName", { length: 255 }).notNull(),
+  sceneId: int("sceneId"),
+  description: text("description"),
+  imageUrl: text("imageUrl"),
+  notes: text("notes"),
+  lockedBy: int("lockedBy"),
+  lockedAt: timestamp("lockedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ProductionMemory = typeof productionMemory.$inferSelect;
+export type InsertProductionMemory = typeof productionMemory.$inferInsert;
+
+// ─── Project Activity Log ─────────────────────────────────────────────────────
+export const projectActivityLog = mysqlTable("project_activity_log", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  userId: int("userId").notNull(),
+  userName: varchar("userName", { length: 255 }),
+  action: varchar("action", { length: 128 }).notNull(),
+  targetType: varchar("targetType", { length: 64 }),
+  targetId: int("targetId"),
+  meta: json("meta"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type ProjectActivityLog = typeof projectActivityLog.$inferSelect;
+export type InsertProjectActivityLog = typeof projectActivityLog.$inferInsert;
+
+// ─── Persistent Shot Records ──────────────────────────────────────────────────
+export const shots = mysqlTable("shots", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  sceneId: int("sceneId").notNull(),
+  orderIndex: int("orderIndex").default(0).notNull(),
+  shotNumber: varchar("shotNumber", { length: 32 }),       // e.g. "1A", "2B"
+  shotType: varchar("shotType", { length: 64 }),            // WS, MS, CU, ECU, OTS, POV…
+  cameraMovement: varchar("cameraMovement", { length: 64 }),
+  lens: varchar("lens", { length: 64 }),
+  frameRate: varchar("frameRate", { length: 16 }),
+  aperture: varchar("aperture", { length: 16 }),
+  cameraBody: varchar("cameraBody", { length: 128 }),
+  framing: text("framing"),                                  // composition notes
+  action: text("action"),                                    // what happens in the shot
+  dialogue: text("dialogue"),                                // dialogue in this shot
+  props: text("props"),
+  wardrobe: text("wardrobe"),
+  vfxNotes: text("vfxNotes"),
+  lightingNotes: text("lightingNotes"),
+  soundNotes: text("soundNotes"),
+  estimatedDuration: float("estimatedDuration"),             // seconds
+  unit: varchar("unit", { length: 32 }),                    // "A Camera", "B Camera", "2nd Unit"
+  status: mysqlEnum("shotStatus", ["pending", "completed", "cut", "needs_retake"]).default("pending").notNull(),
+  notes: text("notes"),
+  createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Shot = typeof shots.$inferSelect;
+export type InsertShot = typeof shots.$inferInsert;
+
+// ─── Persistent Continuity Issues ────────────────────────────────────────────
+export const continuityIssues = mysqlTable("continuity_issues", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  sceneAId: int("sceneAId"),                                 // first scene involved
+  sceneBId: int("sceneBId"),                                 // second scene involved (if cross-scene)
+  severity: mysqlEnum("issueSeverity", ["high", "medium", "low"]).default("medium").notNull(),
+  category: varchar("issueCategory", { length: 64 }),        // "wardrobe", "props", "lighting", "character", "location", "timeline"
+  description: text("description").notNull(),
+  suggestion: text("suggestion"),
+  status: mysqlEnum("issueStatus", ["open", "resolved", "dismissed"]).default("open").notNull(),
+  assignedTo: int("assignedTo"),                             // userId
+  resolvedBy: int("resolvedBy"),
+  resolution: text("resolution"),
+  resolvedAt: timestamp("resolvedAt"),
+  source: mysqlEnum("issueSource", ["ai", "manual"]).default("ai").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ContinuityIssue = typeof continuityIssues.$inferSelect;
+export type InsertContinuityIssue = typeof continuityIssues.$inferInsert;
+
+// ─── Scene Snapshots (version history) ───────────────────────────────────────
+export const sceneSnapshots = mysqlTable("scene_snapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  sceneId: int("sceneId").notNull(),
+  projectId: int("projectId").notNull(),
+  snapshotData: json("snapshotData").notNull(),              // full scene row minus id/timestamps
+  label: varchar("label", { length: 255 }),                  // e.g. "Before director's cut", "Picture lock v2"
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type SceneSnapshot = typeof sceneSnapshots.$inferSelect;
+export type InsertSceneSnapshot = typeof sceneSnapshots.$inferInsert;
