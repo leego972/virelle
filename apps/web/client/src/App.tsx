@@ -102,6 +102,10 @@ const TVCommercial = lazy(() => import("./pages/TVCommercial"));
 const FundingDirectory = lazy(() => import("./pages/FundingDirectory"));
 const ProductionMemory = lazy(() => import("./pages/ProductionMemory"));
 const ActivityLog = lazy(() => import("./pages/ActivityLog"));
+const CrewManagement = lazy(() => import("./pages/CrewManagement"));
+const BeatBoard = lazy(() => import("./pages/BeatBoard"));
+const ProductionReports = lazy(() => import("./pages/ProductionReports"));
+const ScreenerGenerator = lazy(() => import("./pages/ScreenerGenerator"));
 
 // ─── Loading fallback ───
 function PageLoader() {
@@ -156,10 +160,10 @@ function GatedScriptBreakdown() { return <LazyPage><SubscriptionGate feature="Sc
 function GatedShootingSchedule() { return <LazyPage><SubscriptionGate feature="Shooting Schedule" featureKey="canUseShotList" requiredTier="amateur"><ShootingSchedule /></SubscriptionGate></LazyPage>; }
 function GatedFestivalCalendar() { return <LazyPage><FestivalCalendar /></LazyPage>; }
 
-  function GatedCrewManagement() { return <LazyPage><SubscriptionGate feature="Crew Management" featureKey="canUseShotList" requiredTier="amateur"><LazyCrewManagement /></SubscriptionGate></LazyPage>; }
-  function GatedBeatBoard() { return <LazyPage><SubscriptionGate feature="Beat Board" featureKey="canUseScriptWriter" requiredTier="amateur"><LazyBeatBoard /></SubscriptionGate></LazyPage>; }
-  function GatedProductionReports() { return <LazyPage><SubscriptionGate feature="Daily Reports" featureKey="canUseShotList" requiredTier="amateur"><LazyProductionReports /></SubscriptionGate></LazyPage>; }
-  function GatedScreenerGenerator() { return <LazyPage><SubscriptionGate feature="Screener Generator" featureKey="canUseCollaboration" requiredTier="independent"><LazyScreenerGenerator /></SubscriptionGate></LazyPage>; }
+  function GatedCrewManagement() { return <LazyPage><SubscriptionGate feature="Crew Management" featureKey="canUseShotList" requiredTier="amateur"><CrewManagement /></SubscriptionGate></LazyPage>; }
+  function GatedBeatBoard() { return <LazyPage><SubscriptionGate feature="Beat Board" featureKey="canUseScriptWriter" requiredTier="amateur"><BeatBoard /></SubscriptionGate></LazyPage>; }
+  function GatedProductionReports() { return <LazyPage><SubscriptionGate feature="Daily Reports" featureKey="canUseShotList" requiredTier="amateur"><ProductionReports /></SubscriptionGate></LazyPage>; }
+  function GatedScreenerGenerator() { return <LazyPage><SubscriptionGate feature="Screener Generator" featureKey="canUseCollaboration" requiredTier="independent"><ScreenerGenerator /></SubscriptionGate></LazyPage>; }
   
 function Router() {
   return (
