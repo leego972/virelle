@@ -91,7 +91,7 @@ export default function ScreenerGenerator() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [form, setForm] = useState({ recipientName: "", recipientEmail: "", recipientOrg: "", purpose: "festival" as ScreenerLink["purpose"], allowDownload: false, expiresAt: "" });
 
-  const projectQuery = trpc.project.getById.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
+  const projectQuery = trpc.project.get.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
   if (!user) { navigate(getLoginUrl()); return null; }
   const project = projectQuery.data;
 
