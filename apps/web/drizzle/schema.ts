@@ -1255,3 +1255,58 @@ export const sceneSnapshots = mysqlTable("scene_snapshots", {
 });
 export type SceneSnapshot = typeof sceneSnapshots.$inferSelect;
 export type InsertSceneSnapshot = typeof sceneSnapshots.$inferInsert;
+
+  // ─── Feature Cuts ─────────────────────────────────────────────────────────────
+  export const featureCuts = mysqlTable("featureCuts", {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId").notNull(),
+    userId: int("userId").notNull(),
+    title: varchar("title", { length: 255 }).notNull().default("Director's Cut"),
+    description: text("description"),
+    status: mysqlEnum("status", ["open", "locked", "archived"]).default("open").notNull(),
+    totalRuntime: int("totalRuntime").default(0),
+    notes: text("notes"),
+    lockedAt: timestamp("lockedAt"),
+    lockedBy: int("lockedBy"),
+    compiledMovieId: int("compiledMovieId"),
+    version: int("version").default(1).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  });
+  export type FeatureCut = typeof featureCuts.$inferSelect;
+  export type InsertFeatureCut = typeof featureCuts.$inferInsert;
+
+  export const featureCutScenes = mysqlTable("featureCutScenes", {
+    id: int("id").autoincrement().primaryKey(),
+    cutId: int("cutId").notNull(),
+    sceneId: int("sceneId").notNull(),
+    orderIndex: int("orderIndex").notNull().default(0),
+    included: boolean("included").default(true).notNull(),
+    notes: text("notes"),
+    trimStart: int("trimStart").default(0),
+    trimEnd: int("trimEnd"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  });
+  export type FeatureCutScene = typeof featureCutScenes.$inferSelect;
+  export type InsertFeatureCutScene = typeof featureCutScenes.$inferInsert;
+
+  export const compileJobs = mysqlTable("compileJobs", {
+    id: int("id").autoincrement().primaryKey(),
+    cutId: int("cutId").notNull(),
+    projectId: int("projectId").notNull(),
+    userId: int("userId").notNull(),
+    status: mysqlEnum("status", ["queued", "processing", "completed", "failed"]).default("queued").notNull(),
+    progress: int("progress").default(0),
+    currentStep: varchar("currentStep", { length: 255 }),
+    outputMovieId: int("outputMovieId"),
+    outputUrl: text("outputUrl"),
+    errorMessage: text("errorMessage"),
+    scenesTotal: int("scenesTotal").default(0),
+    scenesProcessed: int("scenesProcessed").default(0),
+    metadata: json("metadata"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  });
+  export type CompileJob = typeof compileJobs.$inferSelect;
+  export type InsertCompileJob = typeof compileJobs.$inferInsert;
+  
