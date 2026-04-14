@@ -57,7 +57,10 @@ import {
   Headphones,
   Languages,
   MessageSquare,
-} from "lucide-react";
+    Trophy,
+    ClipboardList,
+    Shield,
+  } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
@@ -89,9 +92,9 @@ const menuGroups = [
     label: "Tools",
     items: [
       { icon: DollarSign, label: "Funding Directory", path: "/funding" },
-        { icon: Trophy, label: "Festival Calendar", path: "/festivals" },
-        { icon: ClipboardList, label: "Production Reports", path: "/projects/1/production-reports" },
-        { icon: Shield, label: "Screener Generator", path: "/projects/1/screener" },
+      { icon: Trophy, label: "Festival Calendar", path: "/festivals" },
+      { icon: ClipboardList, label: "Production Reports", path: "/projects/1/production-reports" },
+      { icon: Shield, label: "Screener Generator", path: "/projects/1/screener" },
     ],
   },
   {
