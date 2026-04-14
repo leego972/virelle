@@ -131,7 +131,7 @@
     const [activeTab, setActiveTab] = useState<"scenes" | "summary" | "dood">("scenes");
     const [expandedScene, setExpandedScene] = useState<string | null>(null);
 
-    const projectQuery = trpc.project.getById.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
+    const projectQuery = trpc.project.get.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
     const scenesQuery = trpc.scene.list.useQuery({ projectId: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
     const charactersQuery = trpc.character.list.useQuery({ projectId: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
 
