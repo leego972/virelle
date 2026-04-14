@@ -152,10 +152,15 @@ function GatedProductionMemory() { return <LazyPage><ProductionMemory /></LazyPa
 function GatedActivityLog() { return <LazyPage><ActivityLog /></LazyPage>; }
 
 function GatedCallSheet() { return <LazyPage><SubscriptionGate feature="Call Sheet Generator" featureKey="canUseShotList" requiredTier="amateur"><CallSheetGenerator /></SubscriptionGate></LazyPage>; }
-  function GatedScriptBreakdown() { return <LazyPage><SubscriptionGate feature="Script Breakdown" featureKey="canUseShotList" requiredTier="amateur"><ScriptBreakdown /></SubscriptionGate></LazyPage>; }
-  function GatedShootingSchedule() { return <LazyPage><SubscriptionGate feature="Shooting Schedule" featureKey="canUseShotList" requiredTier="amateur"><ShootingSchedule /></SubscriptionGate></LazyPage>; }
-  function GatedFestivalCalendar() { return <LazyPage><FestivalCalendar /></LazyPage>; }
+function GatedScriptBreakdown() { return <LazyPage><SubscriptionGate feature="Script Breakdown" featureKey="canUseShotList" requiredTier="amateur"><ScriptBreakdown /></SubscriptionGate></LazyPage>; }
+function GatedShootingSchedule() { return <LazyPage><SubscriptionGate feature="Shooting Schedule" featureKey="canUseShotList" requiredTier="amateur"><ShootingSchedule /></SubscriptionGate></LazyPage>; }
+function GatedFestivalCalendar() { return <LazyPage><FestivalCalendar /></LazyPage>; }
 
+  function GatedCrewManagement() { return <LazyPage><SubscriptionGate feature="Crew Management" featureKey="canUseShotList" requiredTier="amateur"><LazyCrewManagement /></SubscriptionGate></LazyPage>; }
+  function GatedBeatBoard() { return <LazyPage><SubscriptionGate feature="Beat Board" featureKey="canUseScriptWriter" requiredTier="amateur"><LazyBeatBoard /></SubscriptionGate></LazyPage>; }
+  function GatedProductionReports() { return <LazyPage><SubscriptionGate feature="Daily Reports" featureKey="canUseShotList" requiredTier="amateur"><LazyProductionReports /></SubscriptionGate></LazyPage>; }
+  function GatedScreenerGenerator() { return <LazyPage><SubscriptionGate feature="Screener Generator" featureKey="canUseCollaboration" requiredTier="independent"><LazyScreenerGenerator /></SubscriptionGate></LazyPage>; }
+  
 function Router() {
   return (
     <Switch>
@@ -242,14 +247,14 @@ function Router() {
               <Route path="/marketplace">{() => <LazyPage><AssetMarketplace /></LazyPage>}</Route>
               <Route path="/settings">{() => <SettingsPage />}</Route>
               <Route path="/funding">{() => <LazyPage><FundingDirectory /></LazyPage>}</Route>
-                <Route path="/festivals">{() => <GatedFestivalCalendar />}</Route>
-                <Route path="/projects/:projectId/crew">{() => <GatedCrewManagement />}</Route>
-                <Route path="/projects/:projectId/beat-board">{() => <GatedBeatBoard />}</Route>
-                <Route path="/projects/:projectId/production-reports">{() => <GatedProductionReports />}</Route>
-                <Route path="/projects/:projectId/screener">{() => <GatedScreenerGenerator />}</Route>
-                <Route path="/projects/:projectId/call-sheet">{() => <GatedCallSheet />}</Route>
-                <Route path="/projects/:projectId/script-breakdown">{() => <GatedScriptBreakdown />}</Route>
-                <Route path="/projects/:projectId/schedule">{() => <GatedShootingSchedule />}</Route>
+              <Route path="/festivals">{() => <GatedFestivalCalendar />}</Route>
+              <Route path="/projects/:projectId/crew">{() => <GatedCrewManagement />}</Route>
+              <Route path="/projects/:projectId/beat-board">{() => <GatedBeatBoard />}</Route>
+              <Route path="/projects/:projectId/production-reports">{() => <GatedProductionReports />}</Route>
+              <Route path="/projects/:projectId/screener">{() => <GatedScreenerGenerator />}</Route>
+              <Route path="/projects/:projectId/call-sheet">{() => <GatedCallSheet />}</Route>
+              <Route path="/projects/:projectId/script-breakdown">{() => <GatedScriptBreakdown />}</Route>
+              <Route path="/projects/:projectId/schedule">{() => <GatedShootingSchedule />}</Route>
               <Route path="/admin/users">{() => <AdminUsers />}</Route>
               <Route path="/admin/security">{() => <SecurityDashboard />}</Route>
               <Route path="/admin/autonomous">{() => <LazyPage><AdminAutonomous /></LazyPage>}</Route>
