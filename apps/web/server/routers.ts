@@ -8580,5 +8580,184 @@ Return ONLY the JSON array.`;
         }),
     }),
   
+    // ─── Film Post-Production ──────────────────────────────────────────────────
+    // ADR, Foley, Score Cues, and Mix Console — all backed by real DB tables.
+    filmPost: router({
+      // ── Mix Console ──────────────────────────────────────────────────────────
+      getMixSettings: protectedProcedure
+        .input(z.object({ projectId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          return db.getFilmMixSettings(input.projectId, ctx.user.id);
+        }),
+
+      updateMixSettings: protectedProcedure
+        .input(z.object({
+          projectId: z.number(),
+          dialogueBus: z.number().min(0).max(1).optional(),
+          musicBus: z.number().min(0).max(1).optional(),
+          effectsBus: z.number().min(0).max(1).optional(),
+          masterVolume: z.number().min(0).max(2).optional(),
+          dialogueEqLow: z.number().min(-12).max(12).optional(),
+          dialogueEqMid: z.number().min(-12).max(12).optional(),
+          dialogueEqHigh: z.number().min(-12).max(12).optional(),
+          musicEqLow: z.number().min(-12).max(12).optional(),
+          musicEqMid: z.number().min(-12).max(12).optional(),
+          musicEqHigh: z.number().min(-12).max(12).optional(),
+          sfxEqLow: z.number().min(-12).max(12).optional(),
+          sfxEqMid: z.number().min(-12).max(12).optional(),
+          sfxEqHigh: z.number().min(-12).max(12).optional(),
+          reverbRoom: z.enum(["none", "small", "medium", "large", "hall", "cathedral"]).optional(),
+          reverbAmount: z.number().min(0).max(1).optional(),
+          compressionRatio: z.number().min(1).max(20).optional(),
+          noiseReduction: z.boolean().optional(),
+          notes: z.string().max(2000).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const { projectId, ...data } = input;
+          return db.upsertFilmMixSettings(projectId, ctx.user.id, data as any);
+        }),
+
+      // ── ADR Tracks ───────────────────────────────────────────────────────────
+      listAdr: protectedProcedure
+        .input(z.object({ projectId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          return db.getProjectAdrTracks(input.projectId, ctx.user.id);
+        }),
+
+      createAdr: protectedProcedure
+        .input(z.object({
+          projectId: z.number(),
+          characterName: z.string().min(1).max(255),
+          dialogueLine: z.string().min(1),
+          trackType: z.enum(["adr", "wild_track", "loop_group", "walla"]).optional(),
+          sceneId: z.number().optional(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const { projectId, ...data } = input;
+          return db.createAdrTrack(projectId, ctx.user.id, data as any);
+        }),
+
+      updateAdr: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          characterName: z.string().min(1).max(255).optional(),
+          dialogueLine: z.string().optional(),
+          trackType: z.enum(["adr", "wild_track", "loop_group", "walla"]).optional(),
+          status: z.enum(["pending", "recorded", "approved", "rejected"]).optional(),
+          fileUrl: z.string().url().optional(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const { id, ...data } = input;
+          return db.updateAdrTrack(id, ctx.user.id, data as any);
+        }),
+
+      deleteAdr: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          return db.deleteAdrTrack(input.id, ctx.user.id);
+        }),
+
+      // ── Foley Tracks ─────────────────────────────────────────────────────────
+      listFoley: protectedProcedure
+        .input(z.object({ projectId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          return db.getProjectFoleyTracks(input.projectId, ctx.user.id);
+        }),
+
+      createFoley: protectedProcedure
+        .input(z.object({
+          projectId: z.number(),
+          name: z.string().min(1).max(255),
+          foleyType: z.enum(["footsteps", "cloth", "props", "impacts", "environmental", "custom"]).optional(),
+          description: z.string().optional(),
+          volume: z.number().min(0).max(1).optional(),
+          startTime: z.number().min(0).optional(),
+          sceneId: z.number().optional(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const { projectId, ...data } = input;
+          return db.createFoleyTrack(projectId, ctx.user.id, data as any);
+        }),
+
+      updateFoley: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          name: z.string().max(255).optional(),
+          foleyType: z.enum(["footsteps", "cloth", "props", "impacts", "environmental", "custom"]).optional(),
+          description: z.string().optional(),
+          status: z.enum(["pending", "recorded", "approved"]).optional(),
+          fileUrl: z.string().url().optional(),
+          volume: z.number().min(0).max(1).optional(),
+          startTime: z.number().min(0).optional(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const { id, ...data } = input;
+          return db.updateFoleyTrack(id, ctx.user.id, data as any);
+        }),
+
+      deleteFoley: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          return db.deleteFoleyTrack(input.id, ctx.user.id);
+        }),
+
+      // ── Score Cues ───────────────────────────────────────────────────────────
+      listScore: protectedProcedure
+        .input(z.object({ projectId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          return db.getProjectScoreCues(input.projectId, ctx.user.id);
+        }),
+
+      createScore: protectedProcedure
+        .input(z.object({
+          projectId: z.number(),
+          cueNumber: z.string().min(1).max(32),
+          title: z.string().min(1).max(255),
+          cueType: z.enum(["underscore", "source_music", "sting", "theme", "transition", "silence"]).optional(),
+          description: z.string().optional(),
+          volume: z.number().min(0).max(1).optional(),
+          fadeIn: z.number().min(0).optional(),
+          fadeOut: z.number().min(0).optional(),
+          startTime: z.number().min(0).optional(),
+          duration: z.number().min(0).optional(),
+          sceneId: z.number().optional(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const { projectId, ...data } = input;
+          return db.createScoreCue(projectId, ctx.user.id, data as any);
+        }),
+
+      updateScore: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          cueNumber: z.string().max(32).optional(),
+          title: z.string().max(255).optional(),
+          cueType: z.enum(["underscore", "source_music", "sting", "theme", "transition", "silence"]).optional(),
+          description: z.string().optional(),
+          fileUrl: z.string().url().optional(),
+          volume: z.number().min(0).max(1).optional(),
+          fadeIn: z.number().min(0).optional(),
+          fadeOut: z.number().min(0).optional(),
+          startTime: z.number().min(0).optional(),
+          duration: z.number().min(0).optional(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const { id, ...data } = input;
+          return db.updateScoreCue(id, ctx.user.id, data as any);
+        }),
+
+      deleteScore: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          return db.deleteScoreCue(input.id, ctx.user.id);
+        }),
+    }),
+  
 });
 export type AppRouter = typeof appRouter;
