@@ -118,7 +118,7 @@
     const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
     const [view, setView] = useState<"stripboard" | "list">("stripboard");
 
-    const projectQuery = trpc.project.getById.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
+    const projectQuery = trpc.project.get.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
     const scenesQuery = trpc.scene.list.useQuery({ projectId: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
     const charactersQuery = trpc.character.list.useQuery({ projectId: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
 
