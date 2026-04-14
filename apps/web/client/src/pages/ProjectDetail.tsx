@@ -1142,6 +1142,50 @@ export default function ProjectDetail() {
                 </div>
               </CardContent>
             </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-amber-500/40 transition-all border-amber-500/20" onClick={() => setLocation(`/projects/${project.id}/beat-board`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <BookOpen className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">Beat Board <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">New</span></p>
+                  <p className="text-xs text-muted-foreground">Story outline — index cards in three-act structure</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-emerald-500/40 transition-all border-emerald-500/20" onClick={() => setLocation(`/projects/${project.id}/crew`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                  <Users className="h-5 w-5 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">Crew Management <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">New</span></p>
+                  <p className="text-xs text-muted-foreground">Real crew database — departments, contacts, rates</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-orange-500/40 transition-all border-orange-500/20" onClick={() => setLocation(`/projects/${project.id}/production-reports`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+                  <ClipboardList className="h-5 w-5 text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">Daily Reports <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">New</span></p>
+                  <p className="text-xs text-muted-foreground">Daily production reports — scenes, timing, attendance</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:ring-1 hover:ring-sky-500/40 transition-all border-sky-500/20" onClick={() => setLocation(`/projects/${project.id}/screener`)}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
+                  <Shield className="h-5 w-5 text-sky-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">Screener Generator <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">New</span></p>
+                  <p className="text-xs text-muted-foreground">Watermarked secure links for festivals & distributors</p>
+                </div>
+              </CardContent>
+            </Card>
             </div>
           </div>
 
