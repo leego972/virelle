@@ -33,6 +33,7 @@ import {
   InsertContinuityIssue, continuityIssues, ContinuityIssue,
   InsertSceneSnapshot, sceneSnapshots, SceneSnapshot,
   featureCuts, featureCutScenes, compileJobs,
+  filmMixSettings, filmAdrTracks, filmFoleyTracks, filmScoreCues,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2281,5 +2282,170 @@ export async function linkMemoryEntryToScene(memoryId: number, sceneId: number):
       .orderBy(desc(compileJobs.createdAt))
       .limit(1);
     return row ?? null;
+  }
+  
+
+  // ─── Film Post: Mix Settings ───────────────────────────────────────────────────
+
+  export async function getFilmMixSettings(projectId: number, userId: number) {
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db
+      .select()
+      .from(filmMixSettings)
+      .where(and(eq(filmMixSettings.projectId, projectId), eq(filmMixSettings.userId, userId)));
+    return row ?? null;
+  }
+
+  export async function upsertFilmMixSettings(
+    projectId: number,
+    userId: number,
+    data: Partial<{
+      dialogueBus: number; musicBus: number; effectsBus: number; masterVolume: number;
+      dialogueEqLow: number; dialogueEqMid: number; dialogueEqHigh: number;
+      musicEqLow: number; musicEqMid: number; musicEqHigh: number;
+      sfxEqLow: number; sfxEqMid: number; sfxEqHigh: number;
+      reverbRoom: "none" | "small" | "medium" | "large" | "hall" | "cathedral";
+      reverbAmount: number; compressionRatio: number; noiseReduction: boolean; notes: string;
+    }>
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const existing = await getFilmMixSettings(projectId, userId);
+    if (existing) {
+      await db.update(filmMixSettings).set(data).where(eq(filmMixSettings.id, existing.id));
+    } else {
+      await db.insert(filmMixSettings).values({ projectId, userId, ...data } as any);
+    }
+    return getFilmMixSettings(projectId, userId);
+  }
+
+  // ─── Film Post: ADR Tracks ────────────────────────────────────────────────────
+
+  export async function getProjectAdrTracks(projectId: number, userId: number) {
+    const db = await getDb();
+    if (!db) return [];
+    return db
+      .select()
+      .from(filmAdrTracks)
+      .where(and(eq(filmAdrTracks.projectId, projectId), eq(filmAdrTracks.userId, userId)))
+      .orderBy(desc(filmAdrTracks.createdAt));
+  }
+
+  export async function createAdrTrack(
+    projectId: number,
+    userId: number,
+    data: { characterName: string; dialogueLine: string; trackType?: string; sceneId?: number; notes?: string }
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [result] = await db.insert(filmAdrTracks).values({ projectId, userId, ...data } as any);
+    const [row] = await db.select().from(filmAdrTracks).where(eq(filmAdrTracks.id, (result as any).insertId));
+    return row;
+  }
+
+  export async function updateAdrTrack(
+    id: number,
+    userId: number,
+    data: Partial<{ characterName: string; dialogueLine: string; trackType: string; status: string; fileUrl: string; notes: string }>
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.update(filmAdrTracks).set(data as any).where(and(eq(filmAdrTracks.id, id), eq(filmAdrTracks.userId, userId)));
+    const [row] = await db.select().from(filmAdrTracks).where(eq(filmAdrTracks.id, id));
+    return row;
+  }
+
+  export async function deleteAdrTrack(id: number, userId: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(filmAdrTracks).where(and(eq(filmAdrTracks.id, id), eq(filmAdrTracks.userId, userId)));
+    return { success: true };
+  }
+
+  // ─── Film Post: Foley Tracks ──────────────────────────────────────────────────
+
+  export async function getProjectFoleyTracks(projectId: number, userId: number) {
+    const db = await getDb();
+    if (!db) return [];
+    return db
+      .select()
+      .from(filmFoleyTracks)
+      .where(and(eq(filmFoleyTracks.projectId, projectId), eq(filmFoleyTracks.userId, userId)))
+      .orderBy(desc(filmFoleyTracks.createdAt));
+  }
+
+  export async function createFoleyTrack(
+    projectId: number,
+    userId: number,
+    data: { name: string; foleyType?: string; description?: string; volume?: number; startTime?: number; sceneId?: number; notes?: string }
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [result] = await db.insert(filmFoleyTracks).values({ projectId, userId, ...data } as any);
+    const [row] = await db.select().from(filmFoleyTracks).where(eq(filmFoleyTracks.id, (result as any).insertId));
+    return row;
+  }
+
+  export async function updateFoleyTrack(
+    id: number,
+    userId: number,
+    data: Partial<{ name: string; foleyType: string; description: string; status: string; fileUrl: string; volume: number; startTime: number; notes: string }>
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.update(filmFoleyTracks).set(data as any).where(and(eq(filmFoleyTracks.id, id), eq(filmFoleyTracks.userId, userId)));
+    const [row] = await db.select().from(filmFoleyTracks).where(eq(filmFoleyTracks.id, id));
+    return row;
+  }
+
+  export async function deleteFoleyTrack(id: number, userId: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(filmFoleyTracks).where(and(eq(filmFoleyTracks.id, id), eq(filmFoleyTracks.userId, userId)));
+    return { success: true };
+  }
+
+  // ─── Film Post: Score Cues ────────────────────────────────────────────────────
+
+  export async function getProjectScoreCues(projectId: number, userId: number) {
+    const db = await getDb();
+    if (!db) return [];
+    return db
+      .select()
+      .from(filmScoreCues)
+      .where(and(eq(filmScoreCues.projectId, projectId), eq(filmScoreCues.userId, userId)))
+      .orderBy(asc(filmScoreCues.cueNumber));
+  }
+
+  export async function createScoreCue(
+    projectId: number,
+    userId: number,
+    data: { cueNumber: string; title: string; cueType?: string; description?: string; volume?: number; fadeIn?: number; fadeOut?: number; startTime?: number; duration?: number; sceneId?: number; notes?: string }
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [result] = await db.insert(filmScoreCues).values({ projectId, userId, ...data } as any);
+    const [row] = await db.select().from(filmScoreCues).where(eq(filmScoreCues.id, (result as any).insertId));
+    return row;
+  }
+
+  export async function updateScoreCue(
+    id: number,
+    userId: number,
+    data: Partial<{ cueNumber: string; title: string; cueType: string; description: string; status: string; fileUrl: string; volume: number; fadeIn: number; fadeOut: number; startTime: number; duration: number; notes: string }>
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.update(filmScoreCues).set(data as any).where(and(eq(filmScoreCues.id, id), eq(filmScoreCues.userId, userId)));
+    const [row] = await db.select().from(filmScoreCues).where(eq(filmScoreCues.id, id));
+    return row;
+  }
+
+  export async function deleteScoreCue(id: number, userId: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(filmScoreCues).where(and(eq(filmScoreCues.id, id), eq(filmScoreCues.userId, userId)));
+    return { success: true };
   }
   
