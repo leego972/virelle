@@ -156,15 +156,15 @@
 
     const projectQuery = trpc.project.get.useQuery(
       { id: parseInt(projectId || "0") },
-      { enabled: !!projectId && !!user, onSuccess: (p) => { if (!sheet) setSheet(defaultSheet(p?.title || "Untitled Film")); } }
+      { enabled: !!projectId && !!user }
     );
 
-    const scenesQuery = trpc.scene.list.useQuery(
+    const scenesQuery = trpc.scene.listByProject.useQuery(
       { projectId: parseInt(projectId || "0") },
       { enabled: !!projectId && !!user }
     );
 
-    const charactersQuery = trpc.character.list.useQuery(
+    const charactersQuery = trpc.character.listByProject.useQuery(
       { projectId: parseInt(projectId || "0") },
       { enabled: !!projectId && !!user }
     );
@@ -174,6 +174,7 @@
     const project = projectQuery.data;
     const scenes = scenesQuery.data || [];
     const characters = charactersQuery.data || [];
+    useEffect(() => { if (project && !sheet) setSheet(defaultSheet(project.title || "Untitled Film")); }, [project?.id]);
 
     // ── AI Generate ────────────────────────────────────────────────────────────
     async function handleGenerate() {
