@@ -242,6 +242,10 @@ function Router() {
               <Route path="/marketplace">{() => <LazyPage><AssetMarketplace /></LazyPage>}</Route>
               <Route path="/settings">{() => <SettingsPage />}</Route>
               <Route path="/funding">{() => <LazyPage><FundingDirectory /></LazyPage>}</Route>
+                <Route path="/festivals">{() => <GatedFestivalCalendar />}</Route>
+                <Route path="/projects/:projectId/call-sheet">{() => <GatedCallSheet />}</Route>
+                <Route path="/projects/:projectId/script-breakdown">{() => <GatedScriptBreakdown />}</Route>
+                <Route path="/projects/:projectId/schedule">{() => <GatedShootingSchedule />}</Route>
               <Route path="/admin/users">{() => <AdminUsers />}</Route>
               <Route path="/admin/security">{() => <SecurityDashboard />}</Route>
               <Route path="/admin/autonomous">{() => <LazyPage><AdminAutonomous /></LazyPage>}</Route>
