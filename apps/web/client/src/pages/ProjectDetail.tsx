@@ -71,6 +71,7 @@ import {
   Megaphone,
   Pencil,
   StopCircle,
+  ClipboardList, Shield, LayoutGrid as BeatBoardIcon, Users2 as UsersIcon,
 } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { useState, useRef, useCallback, useMemo } from "react";
