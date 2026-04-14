@@ -88,7 +88,7 @@ export default function CrewManagement() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMember, setNewMember] = useState<Omit<CrewMember, "id">>({ name: "", department: "Direction", role: "", phone: "", email: "", ratePerDay: "", imdbUrl: "", notes: "", availability: "available" });
 
-  const projectQuery = trpc.project.getById.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
+  const projectQuery = trpc.project.get.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
   if (!user) { navigate(getLoginUrl()); return null; }
 
   const filtered = useMemo(() => crew.filter(c => {
