@@ -8550,6 +8550,7 @@ Return ONLY the JSON array.`;
 
           // Create compile job record
           const job = await db.createCompileJob(input.cutId, cut.projectId, ctx.user.id, included.length);
+          if (!job) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create compile job" });
 
           // Create a movie record immediately so it appears in My Movies
           const movie = await db.createMovie({
