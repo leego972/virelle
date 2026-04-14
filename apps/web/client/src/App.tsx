@@ -243,6 +243,10 @@ function Router() {
               <Route path="/settings">{() => <SettingsPage />}</Route>
               <Route path="/funding">{() => <LazyPage><FundingDirectory /></LazyPage>}</Route>
                 <Route path="/festivals">{() => <GatedFestivalCalendar />}</Route>
+                <Route path="/projects/:projectId/crew">{() => <GatedCrewManagement />}</Route>
+                <Route path="/projects/:projectId/beat-board">{() => <GatedBeatBoard />}</Route>
+                <Route path="/projects/:projectId/production-reports">{() => <GatedProductionReports />}</Route>
+                <Route path="/projects/:projectId/screener">{() => <GatedScreenerGenerator />}</Route>
                 <Route path="/projects/:projectId/call-sheet">{() => <GatedCallSheet />}</Route>
                 <Route path="/projects/:projectId/script-breakdown">{() => <GatedScriptBreakdown />}</Route>
                 <Route path="/projects/:projectId/schedule">{() => <GatedShootingSchedule />}</Route>
