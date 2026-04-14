@@ -302,6 +302,49 @@ export default function DirectorCut() {
     onError: (e) => toast.error(e.message),
   });
 
+    // ─── Feature Cut management ────────────────────────────────────────────────
+    const [activeCutId, setActiveCutId] = useState<number | null>(null);
+    const [showNewCutDialog, setShowNewCutDialog] = useState(false);
+    const [newCutTitle, setNewCutTitle] = useState("Director's Cut");
+
+    const { data: cuts, refetch: refetchCuts } = trpc.featureCut.list.useQuery(
+      { projectId },
+      { enabled: !!projectId }
+    );
+    const activeCut = cuts?.find((c) => c.id === activeCutId) ?? null;
+    const { data: cutScenes, refetch: refetchCutScenes } = trpc.featureCut.listScenes.useQuery(
+      { cutId: activeCutId! },
+      { enabled: !!activeCutId }
+    );
+
+    const createCutMutation = trpc.featureCut.create.useMutation({
+      onSuccess: (cut) => {
+        refetchCuts();
+        if (cut) { setActiveCutId(cut.id); setNewCutTitle("Director's Cut"); setShowNewCutDialog(false); }
+        toast.success("New cut created");
+      },
+      onError: (e) => toast.error(e.message),
+    });
+    const lockCutMutation = trpc.featureCut.lock.useMutation({
+      onSuccess: () => { refetchCuts(); toast.success("Cut locked — ready to compile"); },
+      onError: (e) => toast.error(e.message),
+    });
+    const reopenCutMutation = trpc.featureCut.reopen.useMutation({
+      onSuccess: () => { refetchCuts(); toast.success("Cut reopened for editing"); },
+      onError: (e) => toast.error(e.message),
+    });
+    const compileMutation = trpc.featureCut.compile.useMutation({
+      onSuccess: (result) => {
+        refetchCuts();
+        toast.success(`"${result.movie.title}" saved to My Movies`);
+      },
+      onError: (e) => toast.error(e.message),
+    });
+    const addSceneToCutMutation = trpc.featureCut.addScene.useMutation({
+      onSuccess: () => { refetchCutScenes?.(); toast.success("Scene added to cut"); },
+      onError: (e) => toast.error(e.message),
+    });
+  
   // Timeline state
   const [scenes, setScenes] = useState<TimelineScene[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -600,7 +643,134 @@ export default function DirectorCut() {
         </div>
       </div>
 
-      {/* ── Main Layout ── */}
+        {/* ── Cut Manager Bar ── */}
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/10 bg-zinc-900/60 shrink-0 overflow-x-auto">
+          <span className="text-xs text-zinc-500 font-medium shrink-0">Cut:</span>
+          <Select value={activeCutId?.toString() ?? ""} onValueChange={(v) => setActiveCutId(v ? parseInt(v) : null)}>
+            <SelectTrigger className="h-6 text-xs w-44 shrink-0 border-white/10 bg-zinc-800">
+              <SelectValue placeholder="No cut selected" />
+            </SelectTrigger>
+            <SelectContent>
+              {(cuts ?? []).map((c) => (
+                <SelectItem key={c.id} value={c.id.toString()}>
+                  {c.status === "locked" ? "🔒 " : "✂️ "}{c.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-xs gap-1 text-zinc-400 hover:text-white shrink-0"
+            onClick={() => setShowNewCutDialog(true)}
+          >
+            <Plus className="w-3 h-3" /> New Cut
+          </Button>
+          {activeCut && (
+            <>
+              <Separator orientation="vertical" className="h-4 mx-1 shrink-0" />
+              <span className="text-[11px] text-zinc-400 shrink-0">
+                {activeCut.status === "locked"
+                  ? `🔒 Locked · ${(cutScenes ?? []).filter((s) => s.included).length} scenes · ${formatTime(activeCut.totalRuntime ?? 0)}`
+                  : `${(cutScenes ?? []).filter((s) => s.included).length} scenes in cut · ${formatTime(activeCut.totalRuntime ?? 0)}`}
+              </span>
+              {activeCut.status === "open" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-xs gap-1 shrink-0 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                  onClick={() => lockCutMutation.mutate({ id: activeCut.id })}
+                  disabled={lockCutMutation.isPending}
+                >
+                  <Flag className="w-3 h-3" />
+                  {lockCutMutation.isPending ? "Locking…" : "Lock Cut"}
+                </Button>
+              )}
+              {activeCut.status === "locked" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-xs gap-1 shrink-0 border-white/10 text-zinc-300"
+                    onClick={() => reopenCutMutation.mutate({ id: activeCut.id })}
+                    disabled={reopenCutMutation.isPending}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    {reopenCutMutation.isPending ? "Reopening…" : "Reopen"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-6 text-xs gap-1.5 shrink-0 bg-primary hover:bg-primary/90"
+                    onClick={() => compileMutation.mutate({ id: activeCut.id })}
+                    disabled={compileMutation.isPending}
+                  >
+                    {compileMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Film className="w-3 h-3" />}
+                    {compileMutation.isPending ? "Compiling…" : "Compile Film"}
+                  </Button>
+                </>
+              )}
+              {activeCut.status === "open" && (
+                <div className="flex items-center gap-1 ml-auto shrink-0">
+                  <span className="text-[10px] text-zinc-600">Add a scene to the cut:</span>
+                  <Select
+                    onValueChange={(v) => {
+                      if (activeCutId && v) addSceneToCutMutation.mutate({ cutId: activeCutId, sceneId: parseInt(v) });
+                    }}
+                  >
+                    <SelectTrigger className="h-6 text-xs w-40 border-white/10 bg-zinc-800">
+                      <SelectValue placeholder="Add scene…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {scenes
+                        .filter((s) => s.id > 0 && !(cutScenes ?? []).some((cs) => cs.sceneId === s.id))
+                        .map((s) => (
+                          <SelectItem key={s.id} value={s.id.toString()}>
+                            {s.title || `Scene ${s.orderIndex + 1}`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* New Cut Dialog */}
+        <Dialog open={showNewCutDialog} onOpenChange={setShowNewCutDialog}>
+          <DialogContent className="sm:max-w-sm bg-zinc-950 border-white/10">
+            <DialogHeader>
+              <DialogTitle className="text-white">Create New Cut</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400">Cut Title</Label>
+                <Input
+                  value={newCutTitle}
+                  onChange={(e) => setNewCutTitle(e.target.value)}
+                  placeholder="Director's Cut"
+                  className="bg-zinc-900 border-white/10 text-white"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") createCutMutation.mutate({ projectId, title: newCutTitle });
+                  }}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" className="border-white/10" onClick={() => setShowNewCutDialog(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                disabled={!newCutTitle.trim() || createCutMutation.isPending}
+                onClick={() => createCutMutation.mutate({ projectId, title: newCutTitle.trim() })}
+              >
+                {createCutMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                Create Cut
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Main Layout ── */}
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: Preview + Timeline ── */}
