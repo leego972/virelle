@@ -90,6 +90,8 @@ const menuGroups = [
     items: [
       { icon: DollarSign, label: "Funding Directory", path: "/funding" },
         { icon: Trophy, label: "Festival Calendar", path: "/festivals" },
+        { icon: ClipboardList, label: "Production Reports", path: "/projects/1/production-reports" },
+        { icon: Shield, label: "Screener Generator", path: "/projects/1/screener" },
     ],
   },
   {
