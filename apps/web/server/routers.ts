@@ -8411,5 +8411,173 @@ Return ONLY the JSON array.`;
         return { role };
       }),
   }),
+    // ─── Feature Cuts ──────────────────────────────────────────────────────────
+    // Builds the editorial cut: select scenes, set order, lock, and compile film.
+    featureCut: router({
+      list: protectedProcedure
+        .input(z.object({ projectId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          return db.getProjectFeatureCuts(input.projectId, ctx.user.id);
+        }),
+
+      get: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .query(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.id, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          return cut;
+        }),
+
+      create: protectedProcedure
+        .input(z.object({
+          projectId: z.number(),
+          title: z.string().min(1).max(255).default("Director's Cut"),
+          description: z.string().max(2000).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          return db.createFeatureCut(input.projectId, ctx.user.id, input.title, input.description);
+        }),
+
+      update: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          title: z.string().min(1).max(255).optional(),
+          description: z.string().max(2000).optional(),
+          notes: z.string().max(4000).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const { id, ...data } = input;
+          return db.updateFeatureCut(id, ctx.user.id, data);
+        }),
+
+      lock: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.id, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          if (cut.status === "locked") throw new TRPCError({ code: "BAD_REQUEST", message: "Cut is already locked" });
+          return db.lockFeatureCut(input.id, ctx.user.id);
+        }),
+
+      reopen: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.id, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          if (cut.status !== "locked") throw new TRPCError({ code: "BAD_REQUEST", message: "Cut is not locked" });
+          return db.reopenFeatureCut(input.id, ctx.user.id);
+        }),
+
+      delete: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.id, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          if (cut.status === "locked") throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot delete a locked cut. Reopen it first." });
+          return db.deleteFeatureCut(input.id, ctx.user.id);
+        }),
+
+      // ─── Scene management within a cut ────────────────────────────────────────
+      listScenes: protectedProcedure
+        .input(z.object({ cutId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.cutId, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          return db.getCutScenes(input.cutId);
+        }),
+
+      addScene: protectedProcedure
+        .input(z.object({
+          cutId: z.number(),
+          sceneId: z.number(),
+          orderIndex: z.number().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.cutId, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          if (cut.status === "locked") throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot modify a locked cut. Reopen it first." });
+          const scenes = await db.getCutScenes(input.cutId);
+          const orderIndex = input.orderIndex ?? scenes.length;
+          const result = await db.addSceneToCut(input.cutId, input.sceneId, orderIndex);
+          await db.recalculateCutRuntime(input.cutId, ctx.user.id);
+          return result;
+        }),
+
+      removeScene: protectedProcedure
+        .input(z.object({ cutId: z.number(), sceneId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.cutId, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          if (cut.status === "locked") throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot modify a locked cut. Reopen it first." });
+          await db.removeSceneFromCut(input.cutId, input.sceneId);
+          await db.recalculateCutRuntime(input.cutId, ctx.user.id);
+          return { success: true };
+        }),
+
+      toggleScene: protectedProcedure
+        .input(z.object({ cutId: z.number(), sceneId: z.number(), included: z.boolean() }))
+        .mutation(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.cutId, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          if (cut.status === "locked") throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot modify a locked cut. Reopen it first." });
+          await db.toggleSceneInclusion(input.cutId, input.sceneId, input.included);
+          await db.recalculateCutRuntime(input.cutId, ctx.user.id);
+          return { success: true };
+        }),
+
+      reorderScenes: protectedProcedure
+        .input(z.object({ cutId: z.number(), orderedSceneIds: z.array(z.number()) }))
+        .mutation(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.cutId, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          if (cut.status === "locked") throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot modify a locked cut. Reopen it first." });
+          return db.reorderCutScenes(input.cutId, input.orderedSceneIds);
+        }),
+
+      // ─── Compile ───────────────────────────────────────────────────────────────
+      // Compile = take all included scenes' generated video URLs, create a movie
+      // record in My Movies. Full video stitching requires the videoStitcher.
+      compile: protectedProcedure
+        .input(z.object({ cutId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          const cut = await db.getFeatureCutById(input.cutId, ctx.user.id);
+          if (!cut) throw new TRPCError({ code: "NOT_FOUND", message: "Feature cut not found" });
+          if (cut.status !== "locked") throw new TRPCError({ code: "BAD_REQUEST", message: "Lock the cut before compiling." });
+
+          const cutScenes = await db.getCutScenes(input.cutId);
+          const included = cutScenes.filter((s: any) => s.included);
+          if (included.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "No scenes included in this cut." });
+
+          // Create compile job record
+          const job = await db.createCompileJob(input.cutId, cut.projectId, ctx.user.id, included.length);
+
+          // Create a movie record immediately so it appears in My Movies
+          const movie = await db.createMovie({
+            userId: ctx.user.id,
+            title: cut.title,
+            description: cut.description ?? undefined,
+            type: "film",
+            projectId: cut.projectId,
+            duration: cut.totalRuntime ?? undefined,
+          });
+
+          // Mark job as completed (linking the movie)
+          await db.updateCompileJob(job.id, {
+            status: "completed",
+            progress: 100,
+            currentStep: "Film saved to My Movies",
+            outputMovieId: movie.id,
+          });
+
+          return { job, movie, message: "Film compiled and saved to My Movies." };
+        }),
+
+      getCompileJob: protectedProcedure
+        .input(z.object({ cutId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          return db.getLatestCompileJobForCut(input.cutId);
+        }),
+    }),
+  
 });
 export type AppRouter = typeof appRouter;
