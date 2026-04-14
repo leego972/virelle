@@ -8696,8 +8696,8 @@ Return ONLY the JSON array.`;
       generateAdrSuggestions: protectedProcedure
         .input(z.object({ projectId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          const scenes = await db.getProjectScenes(input.projectId, ctx.user.id);
-          const characters = await db.getProjectCharacters(input.projectId, ctx.user.id);
+          const scenes = await db.getProjectScenes(input.projectId);
+          const characters = await db.getProjectCharacters(input.projectId);
           const suggestions = characters.slice(0, 5).map((char, i) => ({
             characterName: char.name ?? `Character ${i + 1}`,
             dialogueLine: `[ADR needed for ${char.name ?? "character"} — review production audio]`,
@@ -8756,7 +8756,7 @@ Return ONLY the JSON array.`;
       generateFoleySuggestions: protectedProcedure
         .input(z.object({ projectId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          const scenes = await db.getProjectScenes(input.projectId, ctx.user.id);
+          const scenes = await db.getProjectScenes(input.projectId);
           const defaults = [
             { name: "Footsteps — interior", foleyType: "footsteps" as const, description: "Character footsteps on hard floor" },
             { name: "Footsteps — exterior", foleyType: "footsteps" as const, description: "Character footsteps on gravel/grass" },
@@ -8827,7 +8827,7 @@ Return ONLY the JSON array.`;
       generateScoreCues: protectedProcedure
         .input(z.object({ projectId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          const scenes = await db.getProjectScenes(input.projectId, ctx.user.id);
+          const scenes = await db.getProjectScenes(input.projectId);
           const cues = [
             { cueNumber: "1M1", title: "Main Title", cueType: "theme" as const, description: "Opening title theme", duration: 90, notes: "Auto-suggested" },
             { cueNumber: "1M2", title: "Establishing Underscore", cueType: "underscore" as const, description: "Scene setting atmosphere", duration: 60, notes: "Auto-suggested" },
