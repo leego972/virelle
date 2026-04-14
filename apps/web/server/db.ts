@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, isNull } from "drizzle-orm";
+import { eq, and, asc, desc, isNull, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { sql } from "drizzle-orm";
 import {
@@ -32,6 +32,7 @@ import {
   InsertShot, shots, Shot,
   InsertContinuityIssue, continuityIssues, ContinuityIssue,
   InsertSceneSnapshot, sceneSnapshots, SceneSnapshot,
+  featureCuts, featureCutScenes, compileJobs,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2060,3 +2061,225 @@ export async function linkMemoryEntryToScene(memoryId: number, sceneId: number):
   if (!db) throw new Error("Database not available");
   await db.update(productionMemory).set({ sceneId }).where(eq(productionMemory.id, memoryId));
 }
+
+
+  // ─── Feature Cuts ──────────────────────────────────────────────────────────────
+
+  export async function createFeatureCut(
+    projectId: number,
+    userId: number,
+    title: string,
+    description?: string
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [result] = await db.insert(featureCuts).values({
+      projectId,
+      userId,
+      title,
+      description,
+    });
+    return getFeatureCutById((result as any).insertId, userId);
+  }
+
+  export async function getProjectFeatureCuts(projectId: number, userId: number) {
+    const db = await getDb();
+    if (!db) return [];
+    return db
+      .select()
+      .from(featureCuts)
+      .where(
+        and(eq(featureCuts.projectId, projectId), eq(featureCuts.userId, userId))
+      )
+      .orderBy(desc(featureCuts.createdAt));
+  }
+
+  export async function getFeatureCutById(id: number, userId: number) {
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db
+      .select()
+      .from(featureCuts)
+      .where(and(eq(featureCuts.id, id), eq(featureCuts.userId, userId)));
+    return row ?? null;
+  }
+
+  export async function updateFeatureCut(
+    id: number,
+    userId: number,
+    data: Partial<{ title: string; description: string; notes: string; totalRuntime: number }>
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db
+      .update(featureCuts)
+      .set(data)
+      .where(and(eq(featureCuts.id, id), eq(featureCuts.userId, userId)));
+    return getFeatureCutById(id, userId);
+  }
+
+  export async function lockFeatureCut(id: number, userId: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db
+      .update(featureCuts)
+      .set({ status: "locked", lockedAt: new Date(), lockedBy: userId })
+      .where(and(eq(featureCuts.id, id), eq(featureCuts.userId, userId)));
+    return getFeatureCutById(id, userId);
+  }
+
+  export async function reopenFeatureCut(id: number, userId: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db
+      .update(featureCuts)
+      .set({ status: "open", lockedAt: null, lockedBy: null })
+      .where(and(eq(featureCuts.id, id), eq(featureCuts.userId, userId)));
+    return getFeatureCutById(id, userId);
+  }
+
+  export async function deleteFeatureCut(id: number, userId: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(featureCutScenes).where(eq(featureCutScenes.cutId, id));
+    await db
+      .delete(featureCuts)
+      .where(and(eq(featureCuts.id, id), eq(featureCuts.userId, userId)));
+    return { success: true };
+  }
+
+  // ─── Feature Cut Scenes ────────────────────────────────────────────────────────
+
+  export async function getCutScenes(cutId: number) {
+    const db = await getDb();
+    if (!db) return [];
+    return db
+      .select()
+      .from(featureCutScenes)
+      .where(eq(featureCutScenes.cutId, cutId))
+      .orderBy(asc(featureCutScenes.orderIndex));
+  }
+
+  export async function addSceneToCut(cutId: number, sceneId: number, orderIndex: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    // Avoid duplicates
+    const [existing] = await db
+      .select()
+      .from(featureCutScenes)
+      .where(and(eq(featureCutScenes.cutId, cutId), eq(featureCutScenes.sceneId, sceneId)));
+    if (existing) return existing;
+    const [result] = await db.insert(featureCutScenes).values({ cutId, sceneId, orderIndex });
+    const [row] = await db
+      .select()
+      .from(featureCutScenes)
+      .where(eq(featureCutScenes.id, (result as any).insertId));
+    return row;
+  }
+
+  export async function removeSceneFromCut(cutId: number, sceneId: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db
+      .delete(featureCutScenes)
+      .where(and(eq(featureCutScenes.cutId, cutId), eq(featureCutScenes.sceneId, sceneId)));
+    return { success: true };
+  }
+
+  export async function toggleSceneInclusion(cutId: number, sceneId: number, included: boolean) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db
+      .update(featureCutScenes)
+      .set({ included })
+      .where(and(eq(featureCutScenes.cutId, cutId), eq(featureCutScenes.sceneId, sceneId)));
+    return { success: true };
+  }
+
+  export async function reorderCutScenes(cutId: number, orderedSceneIds: number[]) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    for (let i = 0; i < orderedSceneIds.length; i++) {
+      await db
+        .update(featureCutScenes)
+        .set({ orderIndex: i })
+        .where(
+          and(eq(featureCutScenes.cutId, cutId), eq(featureCutScenes.sceneId, orderedSceneIds[i]))
+        );
+    }
+    return { success: true };
+  }
+
+  export async function recalculateCutRuntime(cutId: number, userId: number) {
+    const db = await getDb();
+    if (!db) return;
+    const cutScenes = await db
+      .select({ sceneId: featureCutScenes.sceneId, included: featureCutScenes.included })
+      .from(featureCutScenes)
+      .where(eq(featureCutScenes.cutId, cutId));
+    const includedIds = cutScenes.filter((s) => s.included).map((s) => s.sceneId);
+    if (includedIds.length === 0) {
+      await db.update(featureCuts).set({ totalRuntime: 0 }).where(eq(featureCuts.id, cutId));
+      return;
+    }
+    const sceneRows = await db
+      .select({ duration: scenes.duration })
+      .from(scenes)
+      .where(inArray(scenes.id, includedIds));
+    const total = sceneRows.reduce((sum, s) => sum + (s.duration ?? 0), 0);
+    await db.update(featureCuts).set({ totalRuntime: total }).where(eq(featureCuts.id, cutId));
+  }
+
+  // ─── Compile Jobs ─────────────────────────────────────────────────────────────
+
+  export async function createCompileJob(cutId: number, projectId: number, userId: number, scenesTotal: number) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [result] = await db.insert(compileJobs).values({
+      cutId,
+      projectId,
+      userId,
+      scenesTotal,
+      status: "queued",
+      currentStep: "Preparing scenes for compilation...",
+    });
+    return getCompileJobById((result as any).insertId);
+  }
+
+  export async function getCompileJobById(id: number) {
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db.select().from(compileJobs).where(eq(compileJobs.id, id));
+    return row ?? null;
+  }
+
+  export async function updateCompileJob(
+    id: number,
+    data: Partial<{
+      status: "queued" | "processing" | "completed" | "failed";
+      progress: number;
+      currentStep: string;
+      outputMovieId: number;
+      outputUrl: string;
+      errorMessage: string;
+      scenesProcessed: number;
+    }>
+  ) {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.update(compileJobs).set(data).where(eq(compileJobs.id, id));
+    return getCompileJobById(id);
+  }
+
+  export async function getLatestCompileJobForCut(cutId: number) {
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db
+      .select()
+      .from(compileJobs)
+      .where(eq(compileJobs.cutId, cutId))
+      .orderBy(desc(compileJobs.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+  
