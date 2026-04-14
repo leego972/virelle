@@ -84,7 +84,7 @@ export default function BeatBoard() {
   const [newBeat, setNewBeat] = useState<Omit<Beat, "id">>({ title: "", description: "", act: "Act 1", color: "zinc", characters: "", orderIndex: 0, isMajor: false });
   const [view, setView] = useState<"board" | "list">("board");
 
-  const projectQuery = trpc.project.getById.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
+  const projectQuery = trpc.project.get.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
   if (!user) { navigate(getLoginUrl()); return null; }
   const project = projectQuery.data;
 
