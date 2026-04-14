@@ -89,6 +89,7 @@ const menuGroups = [
     label: "Tools",
     items: [
       { icon: DollarSign, label: "Funding Directory", path: "/funding" },
+        { icon: Trophy, label: "Festival Calendar", path: "/festivals" },
     ],
   },
   {
