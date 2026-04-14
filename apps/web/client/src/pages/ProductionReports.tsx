@@ -97,7 +97,7 @@
     const [reports, setReports] = useState<DPR[]>([]);
     const [activeReport, setActiveReport] = useState<number | null>(null);
 
-    const projectQuery = trpc.project.getById.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
+    const projectQuery = trpc.project.get.useQuery({ id: parseInt(projectId || "0") }, { enabled: !!projectId && !!user });
 
     if (!user) { navigate(getLoginUrl()); return null; }
 
