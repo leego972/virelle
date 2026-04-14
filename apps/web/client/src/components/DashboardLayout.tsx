@@ -57,10 +57,9 @@ import {
   Headphones,
   Languages,
   MessageSquare,
-    Trophy,
-    ClipboardList,
-    Shield,
-  } from "lucide-react";
+  Trophy,
+  ClipboardList,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
