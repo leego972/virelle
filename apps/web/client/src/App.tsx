@@ -69,6 +69,12 @@ const CreditsPage = lazy(() => import("./pages/Credits"));
 const ProjectSamples = lazy(() => import("./pages/ProjectSamples"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
 
+// New industry-standard production management pages — lazy loaded
+const CallSheetGenerator = lazy(() => import("./pages/CallSheetGenerator"));
+  const ScriptBreakdown = lazy(() => import("./pages/ScriptBreakdown"));
+  const ShootingSchedule = lazy(() => import("./pages/ShootingSchedule"));
+  const FestivalCalendar = lazy(() => import("./pages/FestivalCalendar"));
+
 // Full-screen tool pages — lazy loaded (Pro features, heavy components)
 const ScriptWriter = lazy(() => import("./pages/ScriptWriter"));
 const Storyboard = lazy(() => import("./pages/Storyboard"));
@@ -144,6 +150,11 @@ function GatedTrailerStudio() { return <LazyPage><SubscriptionGate feature="Trai
 function GatedTVCommercial() { return <LazyPage><SubscriptionGate feature="TV Commercial Creator" featureKey="canUseAdPosterMaker" requiredTier="independent"><TVCommercial /></SubscriptionGate></LazyPage>; }
 function GatedProductionMemory() { return <LazyPage><ProductionMemory /></LazyPage>; }
 function GatedActivityLog() { return <LazyPage><ActivityLog /></LazyPage>; }
+
+function GatedCallSheet() { return <LazyPage><SubscriptionGate feature="Call Sheet Generator" featureKey="canUseShotList" requiredTier="amateur"><CallSheetGenerator /></SubscriptionGate></LazyPage>; }
+  function GatedScriptBreakdown() { return <LazyPage><SubscriptionGate feature="Script Breakdown" featureKey="canUseShotList" requiredTier="amateur"><ScriptBreakdown /></SubscriptionGate></LazyPage>; }
+  function GatedShootingSchedule() { return <LazyPage><SubscriptionGate feature="Shooting Schedule" featureKey="canUseShotList" requiredTier="amateur"><ShootingSchedule /></SubscriptionGate></LazyPage>; }
+  function GatedFestivalCalendar() { return <LazyPage><FestivalCalendar /></LazyPage>; }
 
 function Router() {
   return (
