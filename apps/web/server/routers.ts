@@ -8825,7 +8825,7 @@ Return ONLY the JSON array.`;
         }),
 
       generateScoreCues: protectedProcedure
-        .input(z.object({ projectId: z.number() }))
+        .input(z.object({ projectId: z.number(), style: z.string().optional() }))
         .mutation(async ({ ctx, input }) => {
           const scenes = await db.getProjectScenes(input.projectId);
           const cues = [
