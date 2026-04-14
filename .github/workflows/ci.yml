@@ -111,6 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-mobile-check]
     if: github.ref == 'refs/heads/main'
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
@@ -132,6 +133,7 @@ jobs:
         env:
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
       - name: Queue iOS build (auto-submit to App Store)
+        continue-on-error: true
         # Builds iOS and auto-submits to App Store once the cloud build
         # completes. --no-wait exits immediately; EAS notifies by email.
         run: |
@@ -148,6 +150,7 @@ jobs:
           EXPO_APPLE_API_KEY_PATH: ${{ format('{0}/.appstoreconnect/private_keys/AuthKey_{1}.p8', runner.temp, secrets.APPLE_API_KEY_ID) }}
           EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - name: Queue Android build
+        continue-on-error: true
         # Android Play Store submission requires a Google Service Account Key
         # which is not yet configured — build only, no auto-submit.
         run: |
