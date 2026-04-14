@@ -154,7 +154,7 @@
     const [generating, setGenerating] = useState(false);
     const [saved, setSaved] = useState(false);
 
-    const projectQuery = trpc.project.getById.useQuery(
+    const projectQuery = trpc.project.get.useQuery(
       { id: parseInt(projectId || "0") },
       { enabled: !!projectId && !!user, onSuccess: (p) => { if (!sheet) setSheet(defaultSheet(p?.title || "Untitled Film")); } }
     );
