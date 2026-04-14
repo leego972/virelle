@@ -701,7 +701,7 @@ export default function DirectorCut() {
                   <Button
                     size="sm"
                     className="h-6 text-xs gap-1.5 shrink-0 bg-primary hover:bg-primary/90"
-                    onClick={() => compileMutation.mutate({ id: activeCut.id })}
+                    onClick={() => compileMutation.mutate({ cutId: activeCut.id })}
                     disabled={compileMutation.isPending}
                   >
                     {compileMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Film className="w-3 h-3" />}
