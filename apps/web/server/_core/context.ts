@@ -1,18 +1,22 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
+import type express from "express";
 import { COOKIE_NAME } from "@shared/const";
 import { SignJWT, jwtVerify } from "jose";
 import * as db from "../db";
 import { registerAdminForRateLimit } from "./rateLimit";
 
-const JWT_SECRET_KEY = process.env.JWT_SECRET || "dev-secret-change-me";
-const secretKey = new TextEncoder().encode(JWT_SECRET_KEY);
-const JWT_ISSUER = "virelle-studios";
+const JWT_SECRET_KEY = process.env.JWT_SECRET;
 
-// Warn loudly if using default secret in production
-if (process.env.NODE_ENV === "production" && JWT_SECRET_KEY === "dev-secret-change-me") {
-  console.error("⚠️  CRITICAL: JWT_SECRET is using the default value in production! Set a strong random secret.");
+if (!JWT_SECRET_KEY) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET is required in production. Set a strong random secret before starting Virelle.");
+  }
+  console.warn("[Auth] JWT_SECRET is not set. Using an unsafe development-only fallback secret.");
 }
+
+const secretKey = new TextEncoder().encode(JWT_SECRET_KEY ?? "dev-secret-change-me");
+const JWT_ISSUER = "virelle-studios";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -130,4 +134,24 @@ export async function createContext(
     user,
     isExpiredTester,
   };
+}
+
+export async function requireAdminExpress(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  try {
+    const ctx = await createContext({ req, res, info: {} } as CreateExpressContextOptions);
+    if (!ctx.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    if (ctx.user.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    return next();
+  } catch (error) {
+    console.error("[AdminAuth] Express admin middleware failed:", error);
+    return res.status(500).json({ error: "Admin authorization failed" });
+  }
 }
