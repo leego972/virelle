@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import LeegoFooter from "@/components/LeegoFooter";
 import GoldWatermark from "@/components/GoldWatermark";
+import StudioOpener from "@/components/StudioOpener";
 
 // ─── Country Codes ───
 
@@ -299,6 +300,7 @@ export default function Register() {
 
   const utils = trpc.useUtils();
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showOpener, setShowOpener] = useState(false);
 
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: () => {
@@ -382,6 +384,10 @@ export default function Register() {
     });
   };
 
+  if (showOpener) {
+    return <StudioOpener onComplete={() => navigate("/")} mode="login" skippable />;
+  }
+
   if (showWelcome) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 relative">
@@ -419,7 +425,7 @@ export default function Register() {
                 </div>
               </div>
               <Button
-                onClick={() => navigate("/")}
+                onClick={() => setShowOpener(true)}
                 className="w-full bg-amber-600 hover:bg-amber-700 text-white text-lg py-6 mt-4"
               >
                 Enter Your Studio
