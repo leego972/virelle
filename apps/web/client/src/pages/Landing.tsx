@@ -439,7 +439,7 @@ export default function Landing() {
                   { label: "Contact", path: "/contact" },
                   { label: "Download App", path: "/download" },
                 ].map(item => (
-                  <button key={item.path} onClick={() => { setMobileMenuOpen(false); if (item.path.startsWith("#")) { document.querySelector(item.path)?.scrollIntoView({ behavior: "smooth" }); } else { setLocation(item.path); } }} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-accent ${item.gold ? "text-amber-400" : "text-foreground/80 hover:text-foreground"}`}>
+                  <button key={item.path} onClick={() => { setMobileMenuOpen(false); if (item.path.startsWith("#")) { document.querySelector(item.path)?.scrollIntoView({ behavior: "smooth" }); } else { setLocation(item.path); } }} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-accent ${"text-foreground/80 hover:text-foreground"}`}>
                     {item.label}
                   </button>
                 ))}
