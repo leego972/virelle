@@ -47,7 +47,6 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const Blog = lazy(() => import("./pages/Blog"));
 const BlogArticle = lazy(() => import("./pages/BlogArticle"));
 const Contact = lazy(() => import("./pages/Contact"));
-const Showcase = lazy(() => import("./pages/Showcase"));
 
 // Legal pages — lazy loaded
 const TermsOfService = lazy(() => import("./pages/legal/TermsOfService"));
@@ -189,7 +188,6 @@ function Router() {
       <Route path="/ai-content-policy">{() => <LazyPage><AIContentPolicy /></LazyPage>}</Route>
       <Route path="/ip-policy">{() => <LazyPage><IPPolicy /></LazyPage>}</Route>
       <Route path="/dmca">{() => <LazyPage><IPPolicy /></LazyPage>}</Route>
-      <Route path="/showcase">{() => <LazyPage><Showcase /></LazyPage>}</Route>
       <Route path="/how-it-works">{() => <LazyPage><HowItWorks /></LazyPage>}</Route>
       <Route path="/about">{() => <LazyPage><About /></LazyPage>}</Route>
       <Route path="/faq">{() => <LazyPage><FAQ /></LazyPage>}</Route>
