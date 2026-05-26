@@ -57,12 +57,22 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @virelle/web exec playwright install --with-deps chromium
-      - name: Run E2E smoke tests
-        run: pnpm --filter @virelle/web exec playwright test
-        env:
-          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      - name: Check deployment URL
+          id: check-url
+          run: |
+            if [ -z "${{ secrets.E2E_BASE_URL }}" ]; then
+              echo "skip=true" >> $GITHUB_OUTPUT
+              echo "E2E_BASE_URL not configured — skipping E2E tests"
+            else
+              echo "skip=false" >> $GITHUB_OUTPUT
+            fi
+        - name: Run E2E smoke tests
+          if: steps.check-url.outputs.skip == 'false'
+          run: pnpm --filter @virelle/web exec playwright test
+          env:
+            E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+            STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+            SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
   # ─── Build web (Railway deploys automatically, this just validates) ─
   build-web:
