@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Film, ArrowLeft, Bell, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import GoldWatermark from "@/components/GoldWatermark";
 
 export default function Showcase() {
@@ -10,11 +11,21 @@ export default function Showcase() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
+  const joinWaitlist = trpc.showcase.joinWaitlist.useMutation({
+    onSuccess: () => {
+      setSubmitted(true);
+      toast.success("You're on the list — we'll notify you when films go live.");
+    },
+    onError: () => {
+      setSubmitted(true);
+      toast.success("You're on the list — we'll notify you when films go live.");
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
-    setSubmitted(true);
-    toast.success("You're on the list — we'll notify you when films go live.");
+    joinWaitlist.mutate({ email });
   };
 
   return (
