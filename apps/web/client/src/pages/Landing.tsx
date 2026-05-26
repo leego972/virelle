@@ -925,9 +925,13 @@ export default function Landing() {
             </div>
             <div className="text-center mt-10">
               <div className="relative inline-block">
-                  <Film className="w-5 h-5" />
-                  View Our Films
-                </button>
+                  <button
+                    onClick={() => setLocation("/showcase")}
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all cursor-pointer"
+                  >
+                    <Film className="w-5 h-5" />
+                    View Our Films
+                  </button>
                 <span className="absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase text-black" style={{ background: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)", boxShadow: "0 0 8px rgba(251,191,36,0.7)" }}>Coming Soon</span>
               </div>
             </div>
