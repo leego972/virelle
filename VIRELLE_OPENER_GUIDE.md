@@ -1,113 +1,84 @@
-# Virelle Studios — Opener Video Behaviour Reference
+# VirElle Studios — StudioOpener Reference Guide
 
-This document exists so that if the opener ever breaks again it can be diagnosed and fixed
-without needing to explain the intended behaviour from scratch.
-
----
-
-## What the Opener Is
-
-The **StudioOpener** (`apps/web/client/src/components/StudioOpener.tsx`) is a full-screen
-cinematic splash that plays the official Virelle Studios video, or falls back to an SVG
-animation if the video cannot load.
+> **Last updated:** May 2026
+> The StudioOpener is the branded intro animation that plays at key moments in the VirElle Studios experience.
 
 ---
 
-## When It MUST Fire — The Three Login Rules
+## Where the opener plays
 
-### 1. After a successful email/password login
-- **File:** `apps/web/client/src/pages/Login.tsx`
-- **Trigger:** `loginMutation.onSuccess` → `setShowOpener(true)`
-- The opener replaces the login form full-screen.
-- On complete → navigates to `/` (dashboard).
-
-### 2. After a successful OAuth login (Google / GitHub)
-- **File:** `apps/web/server/_core/oauth.ts`
-- **Trigger:** server does `res.redirect(302, '/?opener=1')` after the OAuth callback.
-- `Home.tsx` reads `?opener=1` and calls `setShowOpener(true)`.
-- On complete → param is cleared, dashboard shown normally.
-
-### 3. After successful registration (new account)
-- **File:** `apps/web/client/src/pages/Register.tsx`
-- **Trigger:** `registerMutation.onSuccess` → `setShowWelcome(true)`
-- Welcome checklist screen appears first.
-- When user clicks **'Enter Your Studio'** → `setShowOpener(true)`
-- Opener plays, then navigates to `/`.
+| Trigger | File | Mechanism | Skippable |
+|---|---|---|---|
+| Email/password login | `Login.tsx` | `loginMutation.onSuccess` → `setShowOpener(true)` | No |
+| OAuth login (Google/GitHub) | `server/_core/oauth.ts` | Redirect to `/?opener=1`; `Home.tsx` reads param | No |
+| Registration complete | `Register.tsx` | "Enter Your Studio" button → `setShowOpener(true)` → `navigate("/")` | No |
+| Play a **film** in My Movies | `Movies.tsx` | `playMovie()` when `type === "film"` → `setShowOpenerBefore(true)` | No |
+| Play a **trailer** in My Movies | `Movies.tsx` | `playMovie()` when `type === "trailer"` → `setShowOpenerBefore(true)` | No |
+| Play a **scene clip** in My Movies | `Movies.tsx` | Skipped — `type === "scene"` goes straight to player | — |
+| Trailer generation complete | `TrailerStudio.tsx` | `generateTrailer.onSuccess` → `setShowOpener(true)` | Yes |
+| TV Commercial script generation | `TVCommercial.tsx` | `generateAIScript` success → `setShowOpener(true)` | Yes |
 
 ---
 
-## When It MUST Fire — Playing Content in My Movies
+## StudioOpener component
 
-**File:** `apps/web/client/src/pages/Movies.tsx`
+**File:** `apps/web/client/src/components/StudioOpener.tsx`
 
-The `playMovie(movieId, movieType)` helper controls this:
+### Props
 
-| Movie type   | Opener plays? | Notes                                  |
-|--------------|---------------|----------------------------------------|
-| `film`       | YES           | Full generated film                    |
-| `trailer`    | YES           | Generated trailer or advertisement     |
-| `scene`      | NO            | Individual scene clip — plays directly |
-
-The opener is triggered via `setShowOpenerBefore(movieId)`.
-When it completes, `setShowPlayer(movieId)` opens the media player.
-
-The condition to check/fix if this breaks:
-```
-const playMovie = useCallback((movieId, movieType) => {
-  if (movieType === 'film' || movieType === 'trailer') {
-    setShowOpenerBefore(movieId);  // opener plays first
-  } else {
-    setShowPlayer(movieId);        // scenes play directly, no opener
-  }
-}, []);
+```ts
+interface StudioOpenerProps {
+  onComplete: () => void;  // called when animation ends (or user skips)
+  mode?: "film" | "trailer" | "default";
+  skippable?: boolean;     // shows a Skip button if true
+}
 ```
 
----
+### Fallback chain
 
-## Fallback Chain Inside StudioOpener
+1. **Official Virelle branded video** — fetched from CDN
+2. **Showcase scenes montage** — if video fails within 5 s
+3. **SVG animation** — always works, 8 s, pure CSS
 
-The opener tries three things in order:
-
-1. **Official video** — CDN URL hardcoded in StudioOpener.tsx
-   - Loads → plays the video, fires `onComplete` when it ends.
-   - Fails (`onError`) OR no `canplay` within **5 seconds** → falls through.
-
-2. **Showcase scene videos** — fetched via `trpc.showcase.opener.useQuery()`
-   - If the server finds a project titled 'Opener', its scenes play sequentially.
-
-3. **SVG animation** — fully procedural (dove, shield, gold text). Always works.
-   Runs 8 seconds then fires `onComplete`.
-
-The 5-second timeout (to prevent permanent black screen on silent CDN failure):
-```
-useEffect(() => {
-  if (openerVideoReady || openerVideoFailed) return;
-  const fallback = setTimeout(() => setOpenerVideoFailed(true), 5000);
-  return () => clearTimeout(fallback);
-}, [openerVideoReady, openerVideoFailed]);
-```
+The 5-second timeout ensures a silent CDN/CORS failure never leaves the user on a black screen.
 
 ---
 
-## Common Breakage Scenarios
+## CI / E2E Tests
+
+**File:** `apps/web/.github/workflows/ci.yml`
+
+- `TypeScript`, `Lint`, and `Build` must stay green at all times.
+- E2E smoke tests run against the live URL (`E2E_BASE_URL` GitHub Actions variable → `https://virelle.life`).
+- The E2E job has `continue-on-error: true` and a **reachability pre-check** — if the URL is unreachable, tests skip gracefully.
+- If you redeploy to a new URL, update `E2E_BASE_URL` in **GitHub → Settings → Actions → Variables**.
+
+---
+
+## Breakage checklist
 
 | Symptom | Likely cause | Fix |
-|---------|-------------|-----|
-| Black screen that never clears | Video URL expired | 5s timeout will fall back to SVG — or update URL in StudioOpener.tsx |
-| Opener fires before individual scene clips | playMovie condition too broad | Ensure only 'film' and 'trailer' trigger it, never 'scene' |
-| Opener doesn't fire after email login | setShowOpener not called | Check loginMutation.onSuccess in Login.tsx |
-| Opener doesn't fire after OAuth | Server not redirecting to /?opener=1 | Check oauth.ts — must redirect to /?opener=1 on success |
-| Opener doesn't fire after registration | Button onClick broken | Check Register.tsx — button must call setShowOpener(true), not navigate('/') |
+|---|---|---|
+| Opener plays before scene clips | type guard removed in `Movies.tsx` | Restore `if (type !== "scene")` check in `playMovie()` |
+| Opener never shows after login | `loginMutation.onSuccess` navigates instead | Restore `setShowOpener(true)` before navigate |
+| Opener hangs on black screen | CDN video 404 + timeout removed | Restore 5 s timeout in `StudioOpener.tsx` |
+| Opener missing after trailer generation | `generateTrailer.onSuccess` lost setter | Add `setShowOpener(true)` back in `TrailerStudio.tsx` |
+| Opener missing after ad script | `generateAIScript` lost setter | Add `setShowOpener(true)` back in `TVCommercial.tsx` |
+| E2E tests block pushes | `E2E_BASE_URL` points to dead URL | Update GitHub var to new Railway/production URL |
 
 ---
 
-## Files to Check When the Opener Breaks
+## Key files
 
 ```
-apps/web/client/src/components/StudioOpener.tsx   <- the component itself
-apps/web/client/src/pages/Login.tsx               <- fires after email/password login
-apps/web/client/src/pages/Register.tsx            <- fires after registration
-apps/web/client/src/pages/Home.tsx                <- fires after OAuth (reads ?opener=1)
-apps/web/client/src/pages/Movies.tsx              <- fires before films/trailers in My Movies
-apps/web/server/_core/oauth.ts                    <- must redirect to /?opener=1 on success
+apps/web/client/src/
+  components/StudioOpener.tsx     <- the opener component
+  pages/Login.tsx                 <- login trigger
+  pages/Register.tsx              <- registration trigger
+  pages/Home.tsx                  <- OAuth redirect trigger (?opener=1)
+  pages/Movies.tsx                <- film/trailer trigger; scene skip logic
+  pages/TrailerStudio.tsx         <- post-generation trigger
+  pages/TVCommercial.tsx          <- post-script-generation trigger
+apps/web/server/_core/oauth.ts    <- OAuth redirect adds ?opener=1
+apps/web/.github/workflows/ci.yml <- CI pipeline with E2E safety net
 ```
