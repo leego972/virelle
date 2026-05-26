@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import StudioOpener from "@/components/StudioOpener";
 import {
   ArrowLeft, Sparkles, Film, Play, Pause, Plus, Trash2, GripVertical,
   Type, Music, Volume2, Clock, Clapperboard, Wand2, ChevronDown, ChevronUp,
@@ -112,8 +113,8 @@ export default function TrailerStudio() {
   const { data: scenes } = trpc.scene.listByProject.useQuery({ projectId }, { enabled: !!projectId });
   const generateTrailer = trpc.generation.generateTrailer.useMutation({
     onSuccess: (data) => {
-      toast.success("Trailer generated successfully!");
       setGeneratedResult(data);
+      setShowOpener(true);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -130,6 +131,7 @@ export default function TrailerStudio() {
   const [overallPacing, setOverallPacing] = useState<"standard" | "slow" | "fast">("standard");
   const [aspectRatio, setAspectRatio] = useState<"16:9" | "2.39:1" | "4:3" | "9:16">("16:9");
   const [generatedResult, setGeneratedResult] = useState<any>(null);
+  const [showOpener, setShowOpener] = useState(false);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const isMobile = useIsMobile();
   const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
@@ -268,6 +270,19 @@ export default function TrailerStudio() {
     const scene = scenes.find(s => s.id === sceneId);
     return scene?.title || `Scene ${sceneId}`;
   };
+
+  if (showOpener) {
+    return (
+      <StudioOpener
+        onComplete={() => {
+          toast.success("Trailer generated successfully!");
+          setShowOpener(false);
+        }}
+        mode="film"
+        skippable
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
