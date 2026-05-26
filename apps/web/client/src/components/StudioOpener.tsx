@@ -184,6 +184,14 @@ export default function StudioOpener({ onComplete, mode = "login", skippable = t
   // Only fall through to SVG animation if official video failed AND no showcase scenes
   const useSVGAnimation = openerVideoFailed && !hasVideoScenes;
 
+  // Fallback timeout: if the video hasn\'t started within 5s (silent CDN/CORS failure),
+  // mark it as failed so we fall through to SVG animation instead of a permanent black screen.
+  useEffect(() => {
+    if (openerVideoReady || openerVideoFailed) return;
+    const fallback = setTimeout(() => setOpenerVideoFailed(true), 5000);
+    return () => clearTimeout(fallback);
+  }, [openerVideoReady, openerVideoFailed]);
+
   useEffect(() => {
     if (!skippable) return;
     const timer = setTimeout(() => setShowSkip(true), 2000);
