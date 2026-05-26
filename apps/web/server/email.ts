@@ -471,3 +471,119 @@ export async function sendCollaborationInviteEmail(
     return false;
   }
 }
+
+  // ─── Contact Form Inquiry ─────────────────────────────────────────────────────
+  /**
+   * Sends a contact form submission directly to the studio inbox.
+   * Always goes to Studiosvirelle@gmail.com regardless of ENV.
+   */
+  export async function sendContactEmailToStudio(
+    name: string,
+    email: string,
+    company: string | undefined,
+    subject: string,
+    message: string
+  ): Promise<boolean> {
+    const html = `<!DOCTYPE html>
+  <html>
+  <head><meta charset="utf-8"></head>
+  <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 20px;">
+      <tr><td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#141414;border-radius:12px;border:1px solid #262626;overflow:hidden;">
+          <tr>
+            <td style="padding:24px 32px;border-bottom:1px solid #262626;">
+              <h1 style="margin:0;font-size:18px;font-weight:700;color:#d4a843;">📩 New Inquiry — Virelle Studios</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;">
+              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">From:</strong> ${name}</p>
+              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Email:</strong> <a href="mailto:${email}" style="color:#d4a843;">${email}</a></p>
+              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Company:</strong> ${company || "—"}</p>
+              <p style="margin:0 0 16px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Subject:</strong> ${subject}</p>
+              <div style="background-color:#1a1a1a;border:1px solid #262626;border-radius:8px;padding:16px;margin-bottom:24px;">
+                <p style="margin:0;font-size:14px;line-height:1.7;color:#d4d4d4;white-space:pre-wrap;">${message}</p>
+              </div>
+              <a href="mailto:${email}?subject=Re: ${subject}" style="display:inline-block;padding:10px 24px;background-color:#d4a843;color:#0a0a0a;font-size:13px;font-weight:600;text-decoration:none;border-radius:6px;">
+                Reply to ${name}
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px;background-color:#0d0d0d;text-align:center;border-top:1px solid #262626;">
+              <p style="margin:0;font-size:11px;color:#525252;">&copy; ${new Date().getFullYear()} Virelle Studios — Studio Inbox</p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+  </html>`;
+
+    try {
+      await getTransporter().sendMail({
+        from: FROM,
+        to: "Studiosvirelle@gmail.com",
+        replyTo: email,
+        subject: `[Virelle Inquiry] ${subject} — ${name}`,
+        html,
+      });
+      return true;
+    } catch (err) {
+      console.error("Gmail: failed to send contact inquiry:", err);
+      return false;
+    }
+  }
+
+  // ─── Showcase Waitlist ────────────────────────────────────────────────────────
+  /**
+   * Notifies the studio when someone joins the Showcase waitlist.
+   */
+  export async function sendShowcaseWaitlistNotification(
+    email: string
+  ): Promise<boolean> {
+    const html = `<!DOCTYPE html>
+  <html>
+  <head><meta charset="utf-8"></head>
+  <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 20px;">
+      <tr><td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background-color:#141414;border-radius:12px;border:1px solid #262626;overflow:hidden;">
+          <tr>
+            <td style="padding:24px 32px;border-bottom:1px solid #262626;">
+              <h1 style="margin:0;font-size:18px;font-weight:700;color:#d4a843;">🎬 New Showcase Waitlist Signup</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;">
+              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Email:</strong> <a href="mailto:${email}" style="color:#d4a843;">${email}</a></p>
+              <p style="margin:0 0 24px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Time:</strong> ${new Date().toUTCString()}</p>
+              <p style="margin:0;font-size:13px;color:#737373;">This person wants to be notified when the Virelle Showcase goes live.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px;background-color:#0d0d0d;text-align:center;border-top:1px solid #262626;">
+              <p style="margin:0;font-size:11px;color:#525252;">&copy; ${new Date().getFullYear()} Virelle Studios</p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+  </html>`;
+
+    try {
+      await getTransporter().sendMail({
+        from: FROM,
+        to: "Studiosvirelle@gmail.com",
+        subject: `[Showcase Waitlist] ${email}`,
+        html,
+      });
+      return true;
+    } catch (err) {
+      console.error("Gmail: failed to send showcase waitlist notification:", err);
+      return false;
+    }
+  }
+  
