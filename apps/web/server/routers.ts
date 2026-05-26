@@ -6128,6 +6128,13 @@ Generate a detailed production budget estimate.`,
           })),
         };
       }),
+
+    joinWaitlist: publicProcedure
+      .input(z.object({ email: z.string().email().max(320) }))
+      .mutation(async ({ input }) => {
+        sendShowcaseWaitlistNotification(input.email).catch(() => {});
+        return { success: true };
+      }),
   }),
 
   // Director's Assistant Chat
