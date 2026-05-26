@@ -1,202 +1,199 @@
 name: Virelle CI
 
-  on:
-    push:
-      branches: [main, staging]
-    pull_request:
-      branches: [main, staging]
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
 
-  jobs:
-    # ─── Type-check all packages ────────────────────────────────────────
-    typecheck:
-      name: TypeScript Check
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - uses: pnpm/action-setup@v3
-          with:
-            version: 9
-        - uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: pnpm
-        - run: pnpm install --frozen-lockfile
-        - run: pnpm turbo typecheck
+jobs:
+  # ─── Type-check all packages ────────────────────────────────────────
+  typecheck:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo typecheck
 
-    # ─── Lint all packages ──────────────────────────────────────────────
-    lint:
-      name: Lint
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - uses: pnpm/action-setup@v3
-          with:
-            version: 9
-        - uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: pnpm
-        - run: pnpm install --frozen-lockfile
-        - run: pnpm turbo lint
+  # ─── Lint all packages ──────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo lint
 
-    # ─── E2E tests (web) ────────────────────────────────────────────────
-    # Runs against the live deployment. Skipped automatically when
-    # E2E_BASE_URL is not configured in the GitHub staging environment.
-    e2e-web:
-      name: E2E Tests (Web)
-      runs-on: ubuntu-latest
-      environment: staging
-      needs: [typecheck]
-      continue-on-error: true
-      if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
-      steps:
-        - uses: actions/checkout@v4
-        - uses: pnpm/action-setup@v3
-          with:
-            version: 9
-        - uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: pnpm
-        - run: pnpm install --frozen-lockfile
-        - run: pnpm --filter @virelle/web exec playwright install --with-deps chromium
-        - name: Check deployment URL
-          id: check-url
-          run: |
-            if [ -z "${{ secrets.E2E_BASE_URL }}" ]; then
-              echo "skip=true" >> $GITHUB_OUTPUT
-              echo "E2E_BASE_URL not configured — skipping E2E tests"
-            else
-              echo "skip=false" >> $GITHUB_OUTPUT
-            fi
-        - name: Run E2E smoke tests
-          if: steps.check-url.outputs.skip == 'false'
-          run: pnpm --filter @virelle/web exec playwright test
-          env:
-            E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
-            STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-            SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+  # ─── E2E tests — only run when E2E_BASE_URL is a live https:// URL ─
+  e2e-web:
+    name: E2E Tests (Web)
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: [typecheck]
+    continue-on-error: true
+    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @virelle/web exec playwright install --with-deps chromium
+      - name: Check deployment URL
+        id: check-url
+        run: |
+          if [ -z "${{ secrets.E2E_BASE_URL }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "E2E_BASE_URL not configured — skipping E2E tests"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Run E2E smoke tests
+        if: steps.check-url.outputs.skip == 'false'
+        run: pnpm --filter @virelle/web exec playwright test
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
-    # ─── Build web (Railway deploys automatically, this just validates) ─
-    build-web:
-      name: Build Web
-      runs-on: ubuntu-latest
-      needs: [typecheck, lint]
-      steps:
-        - uses: actions/checkout@v4
-        - uses: pnpm/action-setup@v3
-          with:
-            version: 9
-        - uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: pnpm
-        - run: pnpm install --frozen-lockfile
-        - run: pnpm --filter @virelle/web build
-          env:
-            NODE_ENV: production
-            VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+  # ─── Build web ──────────────────────────────────────────────────────
+  build-web:
+    name: Build Web
+    runs-on: ubuntu-latest
+    needs: [typecheck, lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @virelle/web build
+        env:
+          NODE_ENV: production
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
 
-    # ─── Build mobile (EAS handles the actual native build) ─────────────
-    build-mobile-check:
-      name: Mobile TypeScript Check
-      runs-on: ubuntu-latest
-      needs: [typecheck]
-      steps:
-        - uses: actions/checkout@v4
-        - uses: pnpm/action-setup@v3
-          with:
-            version: 9
-        - uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: pnpm
-        - run: pnpm install --frozen-lockfile
-        - run: pnpm --filter @virelle/mobile exec tsc --noEmit
+  # ─── Mobile TypeScript check ────────────────────────────────────────
+  build-mobile-check:
+    name: Mobile TypeScript Check
+    runs-on: ubuntu-latest
+    needs: [typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @virelle/mobile exec tsc --noEmit
 
-    # ─── EAS Build (mobile) — only on main branch ───────────────────────
-    eas-build:
-      name: EAS Build (iOS + Android)
-      runs-on: ubuntu-latest
-      needs: [build-mobile-check]
-      if: github.ref == 'refs/heads/main'
-      continue-on-error: true
-      steps:
-        - uses: actions/checkout@v4
-        - uses: pnpm/action-setup@v3
-          with:
-            version: 9
-        - uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: pnpm
-        - run: pnpm install --frozen-lockfile
-        - uses: expo/expo-github-action@v8
-          with:
-            eas-version: latest
-            token: ${{ secrets.EXPO_TOKEN }}
-        - name: Write Apple API key
-          run: |
-            mkdir -p "$RUNNER_TEMP/.appstoreconnect/private_keys"
-            echo "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
-          env:
-            APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
-        - name: Queue iOS build (auto-submit to App Store)
-          continue-on-error: true
-          run: |
-            pnpm --filter @virelle/mobile exec eas build \
-              --platform ios \
-              --non-interactive \
-              --profile production \
-              --no-wait \
-              --auto-submit
-          env:
-            EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-            EXPO_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-            EXPO_APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-            EXPO_APPLE_API_KEY_PATH: ${{ format('{0}/.appstoreconnect/private_keys/AuthKey_{1}.p8', runner.temp, secrets.APPLE_API_KEY_ID) }}
-            EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        - name: Queue Android build
-          continue-on-error: true
-          run: |
-            pnpm --filter @virelle/mobile exec eas build \
-              --platform android \
-              --non-interactive \
-              --profile production \
-              --no-wait
-          env:
-            EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  # ─── EAS Build (mobile) — only on main ─────────────────────────────
+  eas-build:
+    name: EAS Build (iOS + Android)
+    runs-on: ubuntu-latest
+    needs: [build-mobile-check]
+    if: github.ref == 'refs/heads/main'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Write Apple API key
+        run: |
+          mkdir -p "$RUNNER_TEMP/.appstoreconnect/private_keys"
+          echo "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
+        env:
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+      - name: Queue iOS build
+        continue-on-error: true
+        run: |
+          pnpm --filter @virelle/mobile exec eas build \
+            --platform ios \
+            --non-interactive \
+            --profile production \
+            --no-wait \
+            --auto-submit
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          EXPO_APPLE_API_KEY_PATH: ${{ format('{0}/.appstoreconnect/private_keys/AuthKey_{1}.p8', runner.temp, secrets.APPLE_API_KEY_ID) }}
+          EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Queue Android build
+        continue-on-error: true
+        run: |
+          pnpm --filter @virelle/mobile exec eas build \
+            --platform android \
+            --non-interactive \
+            --profile production \
+            --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-    # ─── Build desktop (Electron) — only on main branch ─────────────────
-    build-desktop:
-      name: Build Desktop (Electron)
-      runs-on: ${{ matrix.os }}
-      needs: [typecheck]
-      if: github.ref == 'refs/heads/main'
-      strategy:
-        matrix:
-          os: [macos-latest, windows-latest, ubuntu-latest]
-      steps:
-        - uses: actions/checkout@v4
-        - uses: pnpm/action-setup@v3
-          with:
-            version: 9
-        - uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: pnpm
-        - run: pnpm install --frozen-lockfile
-        - run: pnpm --filter @virelle/web build
-          env:
-            NODE_ENV: production
-            VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
-        - run: pnpm --filter @virelle/desktop build
-          env:
-            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        - name: Upload desktop artifact
-          uses: actions/upload-artifact@v4
-          with:
-            name: virelle-desktop-${{ matrix.os }}
-            path: apps/desktop/dist/
-            retention-days: 30
-  
+  # ─── Build desktop (Electron) — only on main ────────────────────────
+  build-desktop:
+    name: Build Desktop (Electron)
+    runs-on: ${{ matrix.os }}
+    needs: [typecheck]
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @virelle/web build
+        env:
+          NODE_ENV: production
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+      - run: pnpm --filter @virelle/desktop build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: virelle-desktop-${{ matrix.os }}
+          path: apps/desktop/dist/
+          retention-days: 30
