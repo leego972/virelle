@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import StudioOpener from "@/components/StudioOpener";
 import {
   ArrowLeft, Sparkles, Tv, Play, Pause, Plus, Trash2, GripVertical,
   Type, Music, Volume2, Clock, Megaphone, Wand2, Eye, Download,
@@ -147,6 +148,7 @@ export default function TVCommercial() {
   const [brandColors, setBrandColors] = useState({ primary: "#ffffff", secondary: "#000000" });
   const [tab, setTab] = useState<"shots" | "script" | "brand">("shots");
   const [aiScriptLoading, setAiScriptLoading] = useState(false);
+  const [showOpener, setShowOpener] = useState(false);
   const isMobile = useIsMobile();
   const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
   const [mobileShotOpen, setMobileShotOpen] = useState(false);
@@ -234,7 +236,7 @@ export default function TVCommercial() {
     try {
       // Simulate AI script generation using the project data
       const descriptions = shots.map((s, i) => `Shot ${i + 1} (${s.label}, ${s.durationSec}s): ${s.description}`).join("\n");
-      toast.success("AI script generated — fill in voiceover text for each shot");
+      setShowOpener(true);
       // Auto-fill voiceover placeholders
       setShots(prev => prev.map(s => ({
         ...s,
@@ -266,6 +268,19 @@ export default function TVCommercial() {
     const scene = scenes.find(s => s.id === sceneId);
     return scene?.thumbnailUrl || null;
   };
+
+  if (showOpener) {
+    return (
+      <StudioOpener
+        onComplete={() => {
+          toast.success("Ad script generated — fill in voiceover text for each shot");
+          setShowOpener(false);
+        }}
+        mode="film"
+        skippable
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
