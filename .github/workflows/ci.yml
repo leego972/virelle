@@ -196,3 +196,4 @@ jobs:
           name: virelle-desktop-${{ matrix.os }}
           path: apps/desktop/dist/
           retention-days: 30
+# build
