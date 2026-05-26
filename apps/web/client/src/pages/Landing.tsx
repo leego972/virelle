@@ -272,7 +272,6 @@ export default function Landing() {
     ],
     Resources: [
       { label: "How It Works", desc: "Step-by-step walkthrough", icon: BookOpen, path: "/how-it-works" },
-      { label: "Showcase", desc: "Films made with Virelle Studios", icon: Film, path: "/showcase" },
       { label: "Blog", desc: "AI filmmaking insights and tutorials", icon: FileText, path: "/blog" },
       { label: "FAQ", desc: "Answers to common questions", icon: MessageSquare, path: "/faq" },
       { label: "Download App", desc: "iOS & Android mobile app", icon: Download, path: "/download" },
@@ -358,7 +357,6 @@ export default function Landing() {
                 </div>
               ))}
               <a href="#pricing" className="px-3 py-2 rounded-lg text-foreground/70 hover:text-foreground hover:bg-accent/50 transition-colors">Pricing</a>
-              <button onClick={() => setLocation("/showcase")} className="px-3 py-2 rounded-lg font-semibold transition-colors" style={{ color: '#d4af37' }}>Showcase</button>
             </div>
 
             {/* Right actions */}
@@ -435,7 +433,6 @@ export default function Landing() {
                   { label: "Features", path: "#features" },
                   { label: "Solutions", path: "/solutions" },
                   { label: "Pricing", path: "#pricing" },
-                  { label: "Showcase", path: "/showcase", gold: true },
                   { label: "FAQ", path: "/faq" },
                   { label: "Blog", path: "/blog" },
                   { label: "About", path: "/about" },
@@ -527,10 +524,7 @@ export default function Landing() {
                 Start Your First Film
                 <ArrowRight className="h-4 w-4" />
               </Button>
-              <Button size="lg" variant="outline" onClick={() => setLocation("/showcase")} className="h-13 text-base px-8 gap-2 border-white/20 hover:bg-white/5">
                 <Play className="h-4 w-4" />
-                Watch Films
-              </Button>
               <Button size="lg" variant="ghost" onClick={() => setLocation("/contact")} className="h-13 text-base px-8 gap-2 text-foreground/60 hover:text-foreground">
                 <Building2 className="h-4 w-4" />
                 Talk to Sales
@@ -931,7 +925,6 @@ export default function Landing() {
             </div>
             <div className="text-center mt-10">
               <div className="relative inline-block">
-                <button onClick={() => setLocation("/showcase")} className="inline-flex items-center gap-2 px-8 py-4 rounded-lg font-semibold text-black text-lg transition-all hover:scale-105" style={{ background: "linear-gradient(135deg, #d4af37 0%, #f5e6a3 50%, #d4af37 100%)" }}>
                   <Film className="w-5 h-5" />
                   View Our Films
                 </button>
@@ -1304,7 +1297,6 @@ export default function Landing() {
                     { label: "How It Works", path: "/how-it-works" },
                     { label: "Features", path: "#features" },
                     { label: "Pricing", path: "/pricing" },
-                    { label: "Showcase", path: "/showcase" },
                     { label: "FAQ", path: "/faq" },
                     { label: "Blog", path: "/blog" },
                     { label: "Download App", path: "/download" },
