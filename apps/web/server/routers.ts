@@ -38,6 +38,7 @@ import {
 import { logger } from "./_core/logger";
 import { createSessionToken } from "./_core/context";
 import { notifyOwner } from "./_core/notification";
+import { sendContactEmailToStudio, sendShowcaseWaitlistNotification } from "./email";
 import { getEffectiveTier, getUserLimits, requireFeature, requireGenerationQuota, requireResourceQuota, getOrCreateStripeCustomer, createCheckoutSession, createBillingPortalSession, TIER_LIMITS, CREDIT_COSTS, getVideoCredits, type SubscriptionTier } from "./_core/subscription";
 import { AD_PLATFORMS, generateAdContent, generateCampaignContent, createCampaign, getCampaign, listCampaigns, updateCampaignStatus, deleteCampaign, addPostRecord, getPlatformsByCategory, getRecommendedPlatforms, getSchedulerState, runAutonomousAdCycle, generateImageAd, generateVideoAd, type AdContentType, type AdCampaign } from "./_core/advertisingEngine";
 import { getSocialCredentialStatus, postToLinkedIn, postToReddit, sendWhatsAppMessage, broadcastWhatsApp } from "./_core/socialPostingEngine";
@@ -7906,6 +7907,8 @@ Rules:
           // Non-critical — still succeed even if notification fails
           logger.warn(`Contact form owner notification failed: ${notifyErr}`);
         }
+        // Direct email to studio inbox
+        sendContactEmailToStudio(input.name, input.email, input.company, input.subject, input.message).catch(() => {});
         // Also create an in-app notification for admin users
         try {
           const adminUser = await db.getUserByEmail((ENV.adminEmail || "Studiosvirelle@gmail.com").toLowerCase());
