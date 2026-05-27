@@ -204,7 +204,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-web]
     if: github.ref == 'refs/heads/main'
-    continue-on-error: true  # TODO: replace RAILWAY_TOKEN with personal access token from Railway dashboard → Account Settings → Tokens
     steps:
       - uses: actions/checkout@v4
       - name: Install Railway CLI
