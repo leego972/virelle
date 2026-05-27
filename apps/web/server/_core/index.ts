@@ -7,7 +7,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
-import { createContext } from "./context";
+import { createContext, requireAdminExpress } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { logger } from "./logger";
 import { stripe, priceIdToTier, TIER_LIMITS } from "./subscription";
@@ -438,18 +438,11 @@ async function startServer() {
 
   // ── Admin route guard ─────────────────────────────────────────────────────
   // Both /api/admin/* routes require a valid admin session.
+  // Uses the same requireAdminExpress helper as all other admin-gated routes.
   async function requireAdmin(req: express.Request, res: express.Response): Promise<boolean> {
-    try {
-      const { verifySessionCookie } = await import("./cookies");
-      const { getUserById } = await import("../db");
-      const uid = await verifySessionCookie(req);
-      if (!uid) { res.status(401).json({ error: "Unauthorized" }); return false; }
-      const user = await getUserById(uid);
-      if (!user || user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return false; }
-      return true;
-    } catch {
-      res.status(401).json({ error: "Unauthorized" }); return false;
-    }
+    let passed = false;
+    await requireAdminExpress(req, res, () => { passed = true; });
+    return passed;
   }
 
   // Admin: Grant credits to a user
