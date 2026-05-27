@@ -63,7 +63,7 @@ export const ENV = {
   runwayApiKey: process.env.RUNWAYML_API_SECRET || process.env.RUNWAY_API_KEY || "",
 
   // ─── Pollinations (free video generation — available to all users via key pool) ─
-  pollinationsApiKey: process.env.POLLINATIONS_API_KEY || "sk_KZ0EBVOHXycDd8YnvEZAvLDGnvhK33SP",
+  pollinationsApiKey: process.env.POLLINATIONS_API_KEY ?? "",
 
   // ─── Google (Nano Banana image generation + Veo 3 / Gemini Imagen) ──────────
   googleApiKey: process.env.GOOGLE_API_KEY ?? "",
