@@ -49,17 +49,17 @@
 
     /* ── Background: warm cinematic parchment ── */
     /* Base CSS colour (also used by Tailwind tokens before image loads) */
-    --background: oklch(0.91 0.022 78);
+    --background: oklch(0.93 0.028 80);
 
     /* ── Foreground: deep warm charcoal — high contrast on cream ── */
     --foreground: oklch(0.18 0.028 55);
 
     /* ── Cards: semi-transparent warm cream surface ── */
-    --card: oklch(0.94 0.018 78);
+    --card: oklch(0.95 0.022 80);
     --card-foreground: oklch(0.18 0.028 55);
 
     /* ── Popovers ── */
-    --popover: oklch(0.95 0.015 78);
+    --popover: oklch(0.96 0.018 80);
     --popover-foreground: oklch(0.18 0.028 55);
 
     /* ── Primary: deep warm sienna — reads clearly on cream, cinematic feel ── */
@@ -67,15 +67,15 @@
     --primary-foreground: oklch(0.97 0.008 78);
 
     /* ── Secondary: soft warm tan surface ── */
-    --secondary: oklch(0.85 0.028 72);
+    --secondary: oklch(0.86 0.032 74);
     --secondary-foreground: oklch(0.22 0.030 58);
 
     /* ── Muted: lighter tan ── */
-    --muted: oklch(0.87 0.022 74);
+    --muted: oklch(0.88 0.028 76);
     --muted-foreground: oklch(0.40 0.028 62);
 
     /* ── Accent: warm amber tint for hover/active ── */
-    --accent: oklch(0.83 0.040 72);
+    --accent: oklch(0.84 0.048 74);
     --accent-foreground: oklch(0.20 0.028 58);
 
     /* ── Destructive ── */
@@ -84,7 +84,7 @@
 
     /* ── Borders: warm light brown lines ── */
     --border: oklch(0.76 0.030 68);
-    --input: oklch(0.88 0.022 76);
+    --input: oklch(0.90 0.026 78);
     --ring: oklch(0.38 0.110 55);
 
     /* ── Charts ── */
@@ -175,7 +175,8 @@
   ────────────────────────────────────────────────────────────────────────────── */
   /* ── Light mode body: cinematic parchment background image ─────────────────── */
   body {
-    background-image: url('/cinematic-light-bg.jpg');
+    background-color: oklch(0.93 0.028 80);
+  background-image: url('/cinematic-light-bg.jpg');
     background-size: cover;
     background-position: center top;
     background-attachment: fixed;
@@ -324,7 +325,7 @@
 
   /* ── Glass morphism surface ── */
   .glass {
-      background: oklch(0.95 0.018 78 / 0.75);
+      background: oklch(0.96 0.022 80 / 0.88);
       backdrop-filter: blur(16px) saturate(1.4);
       -webkit-backdrop-filter: blur(16px) saturate(1.4);
       border: 1px solid oklch(0.76 0.030 68 / 0.45);
