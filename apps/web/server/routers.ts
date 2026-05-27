@@ -6963,7 +6963,7 @@ Rules:
         generationsRemaining: remaining,
         resetDate: user.monthlyGenerationsResetAt || null,
         limits,
-isAdmin: user.role === "admin" || user.email === ENV.adminEmail || user.email ===  || user.email ===  || user.email === ,
+isAdmin: user.role === "admin" || (!!ENV.adminEmail && user.email === ENV.adminEmail),
         stripePublishableKey: ENV.stripePublishableKey,
       };
     }),
