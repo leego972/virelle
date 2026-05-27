@@ -61,25 +61,38 @@ export type ThemeColorPalette = (typeof Colors)[ColorScheme];
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
+    /** iOS system fonts */
     sans: "system-ui",
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: "ui-serif",
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: "ui-rounded",
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: "ui-monospace",
+    /** Best iOS equivalents for web brand fonts */
+    display: "Georgia",       // Cormorant Garamond equivalent — elegant serif
+    heading: "Palatino",      // Cinzel equivalent — classical Roman letterforms
+  },
+  android: {
+    sans: "normal",
+    serif: "serif",
+    rounded: "normal",
+    mono: "monospace",
+    display: "serif",
+    heading: "serif",
   },
   default: {
     sans: "normal",
     serif: "serif",
     rounded: "normal",
     mono: "monospace",
+    display: "serif",
+    heading: "serif",
   },
   web: {
     sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     serif: "Georgia, 'Times New Roman', serif",
     rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+    /** Exact match to the web app's Google Font stack */
+    display: "'Cormorant Garamond', 'Cormorant', Georgia, serif",
+    heading: "'Cinzel', 'Trajan Pro', Georgia, serif",
   },
 });
