@@ -1,17 +1,19 @@
 /** @type {const} */
-const themeColors = {
-  primary:    { light: '#7c3aed', dark: '#7c3aed' },
-  primaryLight: { light: '#a855f7', dark: '#a855f7' },
-  accent:     { light: '#e879f9', dark: '#e879f9' },
-  background: { light: '#0a0a0f', dark: '#0a0a0f' },
-  surface:    { light: '#12121a', dark: '#12121a' },
-  surface2:   { light: '#1a1a26', dark: '#1a1a26' },
-  foreground: { light: '#f1f0ff', dark: '#f1f0ff' },
-  muted:      { light: '#8b8ba7', dark: '#8b8ba7' },
-  border:     { light: '#2a2a3e', dark: '#2a2a3e' },
-  success:    { light: '#22d3ee', dark: '#22d3ee' },
-  warning:    { light: '#f59e0b', dark: '#f59e0b' },
-  error:      { light: '#f43f5e', dark: '#f43f5e' },
-};
+  const themeColors = {
+    // ── Core backgrounds — deep warm cinematic black (matches web dark mode) ──
+    primary:       { light: '#c9a84c', dark: '#c9a84c' },   // 18k warm gold
+    primaryLight:  { light: '#e0c870', dark: '#e0c870' },   // lighter gold for highlights
+    accent:        { light: '#e8c855', dark: '#e8c855' },   // bright warm gold CTA
+    background:    { light: '#0c0a06', dark: '#0c0a06' },   // very dark warm near-black
+    surface:       { light: '#1a1409', dark: '#1a1409' },   // elevated card surface
+    surface2:      { light: '#241e0e', dark: '#241e0e' },   // secondary surface
+    foreground:    { light: '#eadfc0', dark: '#eadfc0' },   // warm cream — readable on dark
+    muted:         { light: '#8a7850', dark: '#8a7850' },   // warm muted gold-brown
+    border:        { light: '#2e2410', dark: '#2e2410' },   // subtle warm dark border
+    success:       { light: '#22d3ee', dark: '#22d3ee' },
+    warning:       { light: '#f59e0b', dark: '#f59e0b' },
+    error:         { light: '#f43f5e', dark: '#f43f5e' },
+  };
 
-module.exports = { themeColors };
+  module.exports = { themeColors };
+  
