@@ -225,7 +225,7 @@ export const appRouter = router({
         }
 
         // Admin accounts bypass brute-force lockout
-        const adminEmailsList = [(ENV.adminEmail || "Studiosvirelle@gmail.com").toLowerCase(), "leego972@gmail.com", "brobroplzcheck@gmail.com", "sisteror555@gmail.com"];
+        const adminEmailsList = [(ENV.adminEmail || "").toLowerCase()].filter(Boolean);
         const isAdminAccount = adminEmailsList.includes(user.email?.toLowerCase() || "");
         if (!isAdminAccount) {
           // Security: Check for brute force / lockout before password check
@@ -249,8 +249,8 @@ export const appRouter = router({
         trackLoginAttempt(user.id, clientIP, true);
         logAuditEvent(user.id, "login_success", clientIP, true);
         // Auto-promote admin account if not already admin
-        const adminEmails = [(ENV.adminEmail || "Studiosvirelle@gmail.com").toLowerCase(), "leego972@gmail.com", "brobroplzcheck@gmail.com", "sisteror555@gmail.com"];
-        const isAdminEmail = adminEmails.includes(user.email?.toLowerCase() || "");
+        const adminEmails = [(ENV.adminEmail || "").toLowerCase()].filter(Boolean);
+        const isAdminEmail = adminEmails.length > 0 && adminEmails.includes(user.email?.toLowerCase() || "");
         if (isAdminEmail && user.role !== "admin") {
           await db.updateUserRole(user.id, "admin");
           user = { ...user, role: "admin" } as typeof user;
@@ -266,17 +266,31 @@ export const appRouter = router({
         return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
       }),
     requestPasswordReset: publicProcedure
-      .input(z.object({ email: z.string().email().max(320), origin: z.string().url() }))
-      .mutation(async ({ input }) => {
+      .input(z.object({
+        email: z.string().email().max(320),
+        origin: z.string().url().max(256),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // IP-based rate limit: 5 requests per 15 min per IP
+        const clientIP = ctx.req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || ctx.req.socket.remoteAddress || "unknown";
+        checkRateLimit(-1, `pw-reset:${clientIP}`, 5, 15 * 60 * 1000);
+        // Validate origin against allowlisted domains — prevents open redirect in reset link
+        const ALLOWED_RESET_ORIGINS = new Set([
+          "https://virelle.life",
+          "https://www.virelle.life",
+          "https://staging.virelle.life",
+        ]);
+        const isLocalhost = input.origin.startsWith("http://localhost") || input.origin.startsWith("http://127.0.0.1");
+        if (!isLocalhost && !ALLOWED_RESET_ORIGINS.has(input.origin.replace(/\/$/, ""))) {
+          return { success: true, message: "If an account with that email exists, a reset link has been sent." };
+        }
         const user = await db.getUserByEmail(input.email.toLowerCase());
         if (!user) {
-          // Don't reveal if email exists
           return { success: true, message: "If an account with that email exists, a reset link has been sent." };
         }
         const token = nanoid(64);
         const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
         await db.createPasswordResetToken(user.id, token, expiresAt);
-        // Send password reset email via Gmail SMTP
         const { sendPasswordResetEmail } = await import("./email");
         const sent = await sendPasswordResetEmail(user.email!, token, input.origin);
         if (!sent) {
