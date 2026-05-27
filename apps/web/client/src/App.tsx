@@ -149,9 +149,9 @@ function GatedNLEExport() { return <LazyPage><SubscriptionGate feature="NLE Expo
 function GatedVFXSuite() { return <LazyPage><SubscriptionGate feature="VFX Suite" featureKey="canUseVisualEffects" requiredTier="studio"><VFXSuite /></SubscriptionGate></LazyPage>; }
 function GatedLiveActionPlate() { return <LazyPage><SubscriptionGate feature="Live Action Plate" featureKey="canUseLiveActionPlate" requiredTier="industry"><LiveActionPlate /></SubscriptionGate></LazyPage>; }
 function GatedAICasting() { return <LazyPage><SubscriptionGate feature="AI Casting" featureKey="canUseAICasting" requiredTier="studio"><AICasting /></SubscriptionGate></LazyPage>; }
-function GatedDirectorCut() { return <LazyPage><DirectorCut /></LazyPage>; }
-function GatedTrailerStudio() { return <LazyPage><SubscriptionGate feature="Trailer Studio" featureKey="canUseFullFilmGeneration" requiredTier="independent"><TrailerStudio /></SubscriptionGate></LazyPage>; }
-function GatedTVCommercial() { return <LazyPage><SubscriptionGate feature="TV Commercial Creator" featureKey="canUseAdPosterMaker" requiredTier="independent"><TVCommercial /></SubscriptionGate></LazyPage>; }
+function GatedDirectorCut() { return <LazyPage><SubscriptionGate feature="Director Cut" featureKey="canUseClipChaining" requiredTier="independent"><DirectorCut /></SubscriptionGate></LazyPage>; }
+function GatedTrailerStudio() { return <LazyPage><SubscriptionGate feature="Trailer Studio" featureKey="canUseTrailerGeneration" requiredTier="independent"><TrailerStudio /></SubscriptionGate></LazyPage>; }
+function GatedTVCommercial() { return <LazyPage><SubscriptionGate feature="TV Commercial Creator" featureKey="canUseTrailerGeneration" requiredTier="independent"><TVCommercial /></SubscriptionGate></LazyPage>; }
 function GatedProductionMemory() { return <LazyPage><ProductionMemory /></LazyPage>; }
 function GatedActivityLog() { return <LazyPage><ActivityLog /></LazyPage>; }
 
@@ -163,7 +163,7 @@ function GatedFestivalCalendar() { return <LazyPage><FestivalCalendar /></LazyPa
   function GatedCrewManagement() { return <LazyPage><SubscriptionGate feature="Crew Management" featureKey="canUseShotList" requiredTier="amateur"><CrewManagement /></SubscriptionGate></LazyPage>; }
   function GatedBeatBoard() { return <LazyPage><SubscriptionGate feature="Beat Board" featureKey="canUseScriptWriter" requiredTier="amateur"><BeatBoard /></SubscriptionGate></LazyPage>; }
   function GatedProductionReports() { return <LazyPage><SubscriptionGate feature="Daily Reports" featureKey="canUseShotList" requiredTier="amateur"><ProductionReports /></SubscriptionGate></LazyPage>; }
-  function GatedScreenerGenerator() { return <LazyPage><SubscriptionGate feature="Screener Generator" featureKey="canUseCollaboration" requiredTier="independent"><ScreenerGenerator /></SubscriptionGate></LazyPage>; }
+  function GatedScreenerGenerator() { return <LazyPage><SubscriptionGate feature="Screener Generator" featureKey="canExportMovies" requiredTier="independent"><ScreenerGenerator /></SubscriptionGate></LazyPage>; }
   
 function Router() {
   return (
