@@ -18,7 +18,7 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { TRPCError } from "@trpc/server";
 import { buildVisualDNA, buildScenePrompt, buildSceneBreakdownSystemPrompt, buildTrailerPrompt, ENHANCED_SCENE_SCHEMA, type QualityTier } from "./_core/cinematicPromptEngine";
 import bcrypt from "bcryptjs";
-import { rateLimitAI, rateLimitHeavyAI, rateLimitUpload } from "./_core/rateLimit";
+import { checkRateLimit, rateLimitAI, rateLimitHeavyAI, rateLimitUpload } from "./_core/rateLimit";
 import { sanitizeText } from "./_core/sanitize";
 import {
   checkRegistrationFraud,
@@ -62,7 +62,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(({ ctx }) => {
       if (!ctx.user) return null;
-const adminEmails = [ENV.adminEmail?.toLowerCase()].filter(Boolean);
+      const adminEmails = [ENV.adminEmail?.toLowerCase()].filter(Boolean);
       const isAdmin = ctx.user.role === "admin" || adminEmails.includes(ctx.user.email?.toLowerCase() || "");
       return {
         ...ctx.user,
