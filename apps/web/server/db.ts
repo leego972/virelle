@@ -52,11 +52,10 @@ export async function getDb() {
 }
 
 // ─── Admin email list (canonical — used by ALL auth flows) ───
+// ─── Admin email list (canonical — used by ALL auth flows) ───
+// To add more admin emails, update this list and redeploy.
 export const ADMIN_EMAILS: string[] = [
   "studiosvirelle@gmail.com",
-  "leego972@gmail.com",
-  "brobroplzcheck@gmail.com",
-  "sisteror555@gmail.com",
 ];
 
 // ─── Users ───
