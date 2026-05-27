@@ -41,6 +41,9 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+    /* Cinematic heading fonts */
+    --font-display: "Cormorant Garamond", "Cormorant", Georgia, serif;
+    --font-heading: "Cinzel", "Trajan Pro", Georgia, serif;
 }
 
 /* Light theme — Day mode: black background, gold text */
@@ -372,6 +375,20 @@
     background: linear-gradient(90deg, transparent, oklch(0.78 0.18 85 / 0.4) 30%, oklch(0.78 0.18 85 / 0.4) 70%, transparent);
   }
 
+    /* ── Cinematic font utilities ── */
+    .font-display {
+      font-family: "Cormorant Garamond", "Cormorant", Georgia, serif;
+    }
+    .font-cinzel {
+      font-family: "Cinzel", "Trajan Pro", Georgia, serif;
+    }
+    /* Cormorant italic — for taglines, pull-quotes, film credits style */
+    .font-display-italic {
+      font-family: "Cormorant Garamond", "Cormorant", Georgia, serif;
+      font-style: italic;
+    }
+
+  
   /* ── Cinematic text balance ── */
   .text-balance {
     text-wrap: balance;
