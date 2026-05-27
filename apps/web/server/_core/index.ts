@@ -148,7 +148,6 @@ async function startServer() {
         // Development only: parse without signature check
         event = JSON.parse(req.body.toString());
       }
-      }
     } catch (err: any) {
       logger.error(`Stripe webhook signature verification failed: ${err.message}`);
       res.status(400).send(`Webhook Error: ${err.message}`);
