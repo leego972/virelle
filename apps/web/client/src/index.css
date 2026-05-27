@@ -205,6 +205,40 @@
   }
   
 
+
+/* ── VS Logo watermark — fixed in centre of viewport, never scrolls ───────────
+   Uses body::before so it requires zero HTML changes.
+   vs-wm-light.png for light mode, vs-wm-dark.png for dark mode.
+   position:fixed means it stays perfectly centred even on long pages.
+────────────────────────────────────────────────────────────────────────────── */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url('/vs-wm-light.png');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: min(52vmin, 400px);
+  opacity: 0.11;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dark body::before {
+  background-image: url('/vs-wm-dark.png');
+  opacity: 0.15;
+}
+
+@media (max-width: 767px) {
+  body::before {
+    background-size: min(72vmin, 280px);
+    opacity: 0.08;
+  }
+  .dark body::before {
+    opacity: 0.11;
+  }
+}
+
 @layer base {
 .dark ::-webkit-scrollbar-thumb {
     background: oklch(0.55 0.18 85 / 0.3);
