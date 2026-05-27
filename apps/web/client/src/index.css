@@ -279,8 +279,10 @@
     border: 1px solid oklch(0.78 0.18 85 / 0.12);
   }
   .dark .glass {
-    background: oklch(0.97 0.002 260 / 0.8);
-    border: 1px solid oklch(0.55 0.18 85 / 0.15);
+    background: oklch(0.10 0.016 65 / 0.75);
+    backdrop-filter: blur(16px) saturate(1.5);
+    -webkit-backdrop-filter: blur(16px) saturate(1.5);
+    border: 1px solid oklch(0.78 0.18 85 / 0.14);
   }
 
   /* ── Gradient border button ── */
