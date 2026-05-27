@@ -92,102 +92,67 @@
 
 /* Dark theme — Night mode: white background, black text */
 .dark {
-  --radius: 0.5rem;
-  /* Pure white background */
-  --background: oklch(1.0 0 0);
-  /* Deep black foreground text */
-  --foreground: oklch(0.10 0.005 260);
-  /* Cards: very light grey */
-  --card: oklch(0.97 0.002 260);
-  --card-foreground: oklch(0.10 0.005 260);
-  --popover: oklch(0.97 0.002 260);
-  --popover-foreground: oklch(0.10 0.005 260);
-  /* Primary: gold accent on white */
-  --primary: oklch(0.55 0.18 85);
-  --primary-foreground: oklch(1.0 0 0);
-  /* Secondary: light grey surface */
-  --secondary: oklch(0.93 0.003 260);
-  --secondary-foreground: oklch(0.15 0.005 260);
-  /* Muted: soft light grey */
-  --muted: oklch(0.93 0.003 260);
-  --muted-foreground: oklch(0.40 0.008 260);
-  /* Accent: very light gold tint */
-  --accent: oklch(0.94 0.010 85);
-  --accent-foreground: oklch(0.15 0.005 260);
-  --destructive: oklch(0.55 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  /* Borders: light grey */
-  --border: oklch(0.88 0.004 260);
-  --input: oklch(0.90 0.004 260);
-  --ring: oklch(0.55 0.18 85);
-  /* Charts */
-  --chart-1: oklch(0.55 0.18 85);
-  --chart-2: oklch(0.50 0.15 250);
-  --chart-3: oklch(0.45 0.15 160);
-  --chart-4: oklch(0.50 0.12 30);
-  --chart-5: oklch(0.45 0.15 300);
-  /* Sidebar: near-white with black text */
-  --sidebar: oklch(0.96 0.002 260);
-  --sidebar-foreground: oklch(0.15 0.005 260);
-  --sidebar-primary: oklch(0.55 0.18 85);
-  --sidebar-primary-foreground: oklch(1.0 0 0);
-  --sidebar-accent: oklch(0.92 0.008 85);
-  --sidebar-accent-foreground: oklch(0.15 0.005 260);
-  --sidebar-border: oklch(0.88 0.004 260);
-  --sidebar-ring: oklch(0.55 0.18 85);
-}
+    --radius: 0.5rem;
 
-/* ── Dark mode (white bg) text visibility fixes ──────────────────────────────
-   When .dark is active the background is white. Tailwind amber-100/200/300
-   classes are too light to read on white. Override them to darker shades.
-   This applies globally so every component is fixed without touching each file.
-────────────────────────────────────────────────────────────────────────────── */
-.dark .text-amber-100 { color: rgb(146 64 14) !important; }   /* amber-800 */
-.dark .text-amber-200 { color: rgb(146 64 14) !important; }   /* amber-800 */
-.dark .text-amber-300 { color: rgb(120 53 15) !important; }   /* amber-900 */
-.dark [class*="text-amber-200\/"] { color: rgb(120 53 15) !important; }
-.dark [class*="text-amber-100\/"] { color: rgb(146 64 14) !important; }
-.dark [class*="text-amber-300\/"] { color: rgb(120 53 15) !important; }
-/* Muted body text in cards: ensure readable dark grey on white */
-.dark .text-muted-foreground { color: oklch(0.35 0.008 260) !important; }
+    /* ── Background: deep warm near-black, matching the logo ── */
+    /* oklch(L C H): L=0.07 very dark, C=0.018 subtle chroma, H=65 warm amber direction */
+    --background: oklch(0.07 0.018 65);
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
+    /* ── Foreground: bright gold — the VS brand colour ── */
+    --foreground: oklch(0.82 0.18 85);
+
+    /* ── Cards: slightly lighter warm dark surface ── */
+    --card: oklch(0.10 0.016 65);
+    --card-foreground: oklch(0.82 0.18 85);
+
+    /* ── Popovers: same as card ── */
+    --popover: oklch(0.11 0.016 65);
+    --popover-foreground: oklch(0.82 0.18 85);
+
+    /* ── Primary: bright gold ── */
+    --primary: oklch(0.78 0.18 85);
+    --primary-foreground: oklch(0.07 0.018 65);
+
+    /* ── Secondary: darker gold-tinted surface ── */
+    --secondary: oklch(0.14 0.014 70);
+    --secondary-foreground: oklch(0.75 0.15 85);
+
+    /* ── Muted: subtle warm dark for de-emphasised surfaces ── */
+    --muted: oklch(0.13 0.012 65);
+    --muted-foreground: oklch(0.58 0.12 82);
+
+    /* ── Accent: gold-tinted surface for hover states ── */
+    --accent: oklch(0.16 0.018 70);
+    --accent-foreground: oklch(0.82 0.18 85);
+
+    /* ── Destructive: warm red ── */
+    --destructive: oklch(0.55 0.22 25);
+    --destructive-foreground: oklch(0.98 0 0);
+
+    /* ── Borders: subtle gold-tinted dark lines ── */
+    --border: oklch(0.20 0.016 70);
+    --input: oklch(0.16 0.014 68);
+    --ring: oklch(0.78 0.18 85);
+
+    /* ── Charts ── */
+    --chart-1: oklch(0.78 0.18 85);
+    --chart-2: oklch(0.65 0.15 250);
+    --chart-3: oklch(0.60 0.15 160);
+    --chart-4: oklch(0.70 0.12 30);
+    --chart-5: oklch(0.55 0.15 300);
+
+    /* ── Sidebar: deepest warm black — even darker than background ── */
+    --sidebar: oklch(0.055 0.016 65);
+    --sidebar-foreground: oklch(0.78 0.16 85);
+    --sidebar-primary: oklch(0.78 0.18 85);
+    --sidebar-primary-foreground: oklch(0.07 0.018 65);
+    --sidebar-accent: oklch(0.13 0.018 68);
+    --sidebar-accent-foreground: oklch(0.82 0.18 85);
+    --sidebar-border: oklch(0.18 0.016 68);
+    --sidebar-ring: oklch(0.78 0.18 85);
   }
 
-  /* ── Cinematic smooth scrolling ── */
-  html {
-    scroll-behavior: smooth;
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
-  }
-
-  /* ── Refined selection colour ── */
-  ::selection {
-    background: oklch(0.78 0.18 85 / 0.25);
-    color: inherit;
-  }
-
-  /* ── Scrollbar styling — thin gold on dark ── */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: oklch(0.78 0.18 85 / 0.3);
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.78 0.18 85 / 0.6);
-  }
-  .dark ::-webkit-scrollbar-thumb {
+.dark ::-webkit-scrollbar-thumb {
     background: oklch(0.55 0.18 85 / 0.3);
   }
   .dark ::-webkit-scrollbar-thumb:hover {
@@ -490,4 +455,25 @@
   opacity: 0.035;
   mix-blend-mode: overlay;
   z-index: 1;
-}
+}/* ── Dark mode: golden ambient glow background — mirrors the logo ──────────────
+     A radial gradient that creates a warm amber glow from the top-center (like a
+     spotlight behind the VS emblem), fading into the deep near-black background.
+  ────────────────────────────────────────────────────────────────────────────── */
+  .dark body {
+    background-color: oklch(0.07 0.018 65);
+    background-image:
+      radial-gradient(
+        ellipse 100% 55% at 50% -5%,
+        oklch(0.55 0.18 75 / 0.10) 0%,
+        oklch(0.35 0.14 72 / 0.05) 45%,
+        transparent 75%
+      ),
+      radial-gradient(
+        ellipse 60% 35% at 50% 0%,
+        oklch(0.78 0.18 85 / 0.06) 0%,
+        transparent 60%
+      );
+    background-attachment: fixed;
+  }
+
+  
