@@ -33,7 +33,8 @@ const TESTERS = [
   { email: 'tester558@gmail.com', openId: 'email_tester558', name: 'Tester 558' },
 ];
 
-const PASSWORD     = 'Hello123123';
+const PASSWORD = process.env.TESTER_SEED_PASSWORD;
+if (!PASSWORD) { console.error('Set TESTER_SEED_PASSWORD env var'); process.exit(1); }
 const TIER         = 'creator';
 const CREDITS      = 75;
 
