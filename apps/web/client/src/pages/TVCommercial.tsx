@@ -149,7 +149,20 @@ export default function TVCommercial() {
   const [tab, setTab] = useState<"shots" | "script" | "brand">("shots");
   const [aiScriptLoading, setAiScriptLoading] = useState(false);
   const [showOpener, setShowOpener] = useState(false);
-  const isMobile = useIsMobile();
+    const [generatedResult, setGeneratedResult] = useState<any>(null);
+
+    // ─── Generation pipeline ───
+    const generateTrailerMutation = trpc.generation.generateTrailer.useMutation({
+      onSuccess: (data) => {
+        setGeneratedResult(data);
+        setShowOpener(true);
+        toast.success("Commercial generation started — check the render queue for progress");
+      },
+      onError: (err) => {
+        toast.error(err.message || "Failed to start commercial generation");
+      },
+    });
+    const isMobile = useIsMobile();
   const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
   const [mobileShotOpen, setMobileShotOpen] = useState(false);
 
@@ -230,26 +243,22 @@ export default function TVCommercial() {
     toast.success("Scenes auto-assigned to shots");
   };
 
-  // ─── AI Script Generator ───
-  const generateAIScript = async () => {
-    setAiScriptLoading(true);
-    try {
-      // Simulate AI script generation using the project data
-      const descriptions = shots.map((s, i) => `Shot ${i + 1} (${s.label}, ${s.durationSec}s): ${s.description}`).join("\n");
-      setShowOpener(true);
-      // Auto-fill voiceover placeholders
+  // ─── Generate Commercial ───
+    const generateAIScript = () => {
+      if (!projectId) { toast.error("No project selected"); return; }
+      if (!scenes || scenes.length === 0) {
+        toast.error("Add scenes in the Scene Editor before generating a commercial");
+        return;
+      }
+      // Pre-fill voiceover placeholders so the shot list is immediately usable
       setShots(prev => prev.map(s => ({
         ...s,
-        voiceoverText: s.voiceoverText || `[${s.label} — ${s.description}]`,
+        voiceoverText: s.voiceoverText || "[" + s.label + " — " + s.description + "]",
       })));
-    } catch (err) {
-      toast.error("Failed to generate script");
-    } finally {
-      setAiScriptLoading(false);
-    }
-  };
+      generateTrailerMutation.mutate({ projectId });
+    };
 
-  // ─── Computed ───
+      // ─── Computed ───
   const totalDuration = shots.reduce((sum, s) => sum + s.durationSec, 0);
   const formatTime = (sec: number) => `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, "0")}`;
   const currentPlatform = PLATFORMS.find(p => p.id === platform);
