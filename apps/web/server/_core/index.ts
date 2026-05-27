@@ -113,6 +113,19 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Trust Railway's reverse proxy so req.ip gives real client IP (fixes rate limiting)
+  app.set("trust proxy", 1);
+
+  // Security headers (no-external-dependency; covers the highest-impact cases)
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    next();
+  });
+
   // Stripe webhook endpoint — MUST be before json body parser
   app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     if (!stripe) {
@@ -126,9 +139,15 @@ async function startServer() {
     try {
       if (ENV.stripeWebhookSecret) {
         event = stripe.webhooks.constructEvent(req.body, sig, ENV.stripeWebhookSecret);
+      } else if (ENV.isProduction) {
+        // Never accept unverified webhooks in production
+        logger.error("STRIPE_WEBHOOK_SECRET is not set; rejecting unverified webhook in production");
+        res.status(400).send("Webhook Error: signature verification required in production");
+        return;
       } else {
-        // In development without webhook secret, parse directly
+        // Development only: parse without signature check
         event = JSON.parse(req.body.toString());
+      }
       }
     } catch (err: any) {
       logger.error(`Stripe webhook signature verification failed: ${err.message}`);
@@ -328,8 +347,8 @@ async function startServer() {
   });
 
   // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use(express.json({ limit: "5mb" }));
+  app.use(express.urlencoded({ limit: "5mb", extended: true }));
 
   // Request logging middleware
   app.use("/api/", (req, _res, next) => {
@@ -418,8 +437,25 @@ async function startServer() {
     res.json({ status: "ok", results });
   });
 
+  // ── Admin route guard ─────────────────────────────────────────────────────
+  // Both /api/admin/* routes require a valid admin session.
+  async function requireAdmin(req: express.Request, res: express.Response): Promise<boolean> {
+    try {
+      const { verifySessionCookie } = await import("./cookies");
+      const { getUserById } = await import("../db");
+      const uid = await verifySessionCookie(req);
+      if (!uid) { res.status(401).json({ error: "Unauthorized" }); return false; }
+      const user = await getUserById(uid);
+      if (!user || user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return false; }
+      return true;
+    } catch {
+      res.status(401).json({ error: "Unauthorized" }); return false;
+    }
+  }
+
   // Admin: Grant credits to a user
   app.post("/api/admin/grant-credits", express.json(), async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
     try {
       const { userId, amount } = req.body;
       if (!userId || !amount) {
@@ -441,6 +477,7 @@ async function startServer() {
 
   // Admin: Reset project (delete scenes, update duration, reset status)
   app.post("/api/admin/reset-project", express.json(), async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
     try {
       const { projectId, duration } = req.body;
       if (!projectId) { res.status(400).json({ error: "projectId required" }); return; }
