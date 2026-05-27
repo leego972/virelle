@@ -62,7 +62,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(({ ctx }) => {
       if (!ctx.user) return null;
-      const adminEmails = [ENV.adminEmail?.toLowerCase(), "leego972@gmail.com", "brobroplzcheck@gmail.com", "sisteror555@gmail.com"];
+      const adminEmails = [ENV.adminEmail?.toLowerCase(), /* removed */"", /* removed */"", /* removed */""];
       const isAdmin = ctx.user.role === "admin" || adminEmails.includes(ctx.user.email?.toLowerCase() || "");
       return {
         ...ctx.user,
@@ -6963,7 +6963,7 @@ Rules:
         generationsRemaining: remaining,
         resetDate: user.monthlyGenerationsResetAt || null,
         limits,
-        isAdmin: user.role === "admin" || user.email === ENV.adminEmail || user.email === "leego972@gmail.com" || user.email === "brobroplzcheck@gmail.com" || user.email === "sisteror555@gmail.com",
+        isAdmin: user.role === "admin" || user.email === ENV.adminEmail || user.email === /* removed */"" || user.email === /* removed */"" || user.email === /* removed */"",
         stripePublishableKey: ENV.stripePublishableKey,
       };
     }),
