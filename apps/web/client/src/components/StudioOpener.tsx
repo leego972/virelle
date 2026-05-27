@@ -215,6 +215,26 @@ export default function StudioOpener({ onComplete, mode = "login", skippable = t
     return () => window.removeEventListener("keydown", handleKey);
   }, [handleSkip]);
 
+  // Lock body scroll while opener plays — prevents DashboardLayout content from
+  // bleeding through on mobile Safari (position:fixed doesn't fully block scroll)
+  useEffect(() => {
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBodyPos = document.body.style.position;
+    const prevBodyW = document.body.style.width;
+    // iOS Safari requires position:fixed on body to fully prevent background scroll
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.position = prevBodyPos;
+      document.body.style.width = prevBodyW;
+    };
+  }, []);
+
   // rAF animation loop
   useEffect(() => {
     // Only run SVG animation if official video failed AND no showcase scenes
@@ -353,11 +373,22 @@ export default function StudioOpener({ onComplete, mode = "login", skippable = t
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] bg-black flex items-center justify-center overflow-hidden transition-opacity duration-700 ${
+      className={`fixed z-[9999] bg-black flex items-center justify-center overflow-hidden transition-opacity duration-700 ${
         phase === "fadeout" ? "opacity-0" : "opacity-100"
       }`}
       onClick={skippable ? handleSkip : undefined}
-      style={{ cursor: skippable ? "pointer" : "default" }}
+      style={{
+        cursor: skippable ? "pointer" : "default",
+        // Force full-viewport coverage on mobile Safari (position:fixed + inset-0 has known bugs)
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: "100vw",
+        height: "100%",
+        touchAction: "none",
+      }}
     >
       {/* ── Official opener video (primary) ── */}
       {useOfficialVideo && (
