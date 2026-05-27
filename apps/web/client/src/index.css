@@ -400,7 +400,21 @@
 
 /* ===== Mobile Responsive Utilities ===== */
 
+/* Fix: background-attachment:fixed breaks on iOS Safari — bg doesn't scroll correctly */
+@media (max-width: 1024px) {
+  body, .dark body {
+    background-attachment: scroll;
+  }
+}
+
 @media (max-width: 767px) {
+  /* Responsive heading sizes — Cormorant/Cinzel need scaling on small screens */
+  h1 { font-size: clamp(1.8rem, 7.5vw, 3.5rem); letter-spacing: -0.01em; }
+  h2 { font-size: clamp(1.1rem, 5vw, 1.75rem); letter-spacing: 0.04em; }
+  h3 { font-size: clamp(1rem, 4vw, 1.4rem);    letter-spacing: 0.04em; }
+  h4 { font-size: clamp(0.9rem, 3.5vw, 1.2rem); letter-spacing: 0.03em; }
+  h5, h6 { letter-spacing: 0.07em; }
+
   /* Prevent iOS zoom on input focus (must be >= 16px) */
   select, input, textarea {
     font-size: 16px !important;
