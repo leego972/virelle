@@ -24,6 +24,18 @@ const STUDIO_BCC = ENV.adminEmail || "Studiosvirelle@gmail.com";
 
 // ─── Password Reset ───────────────────────────────────────────────────────────
 
+  /** Escape a string for safe insertion into an HTML template */
+  function esc(s: string | undefined | null): string {
+    if (!s) return "";
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;");
+  }
+
+  
 export async function sendPasswordResetEmail(
   to: string,
   resetToken: string,
@@ -133,7 +145,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<boolea
           </tr>
           <tr>
             <td style="padding:32px;">
-              <h2 style="margin:0 0 16px;font-size:18px;font-weight:600;color:#f5f5f5;">Welcome, ${name}!</h2>
+              <h2 style="margin:0 0 16px;font-size:18px;font-weight:600;color:#f5f5f5;">Welcome, ${esc(name)}!/h2>
               <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#a3a3a3;">
                 Your account is ready. Start creating AI films, VFX scenes, and more — all from your browser.
               </p>
@@ -228,7 +240,7 @@ export async function sendSubscriptionConfirmationEmail(
             <td style="padding:32px;">
               <h2 style="margin:0 0 16px;font-size:18px;font-weight:600;color:#f5f5f5;">Subscription Confirmed</h2>
               <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#a3a3a3;">
-                Hi ${name}, your <strong style="color:#d4a843;">${planName}</strong> subscription is now active. You have full access to all features included in your plan.
+                Hi ${esc(name)}, your <strong style="color:#d4a843;">${planName}</strong> subscription is now active. You have full access to all features included in your plan.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
@@ -498,15 +510,15 @@ export async function sendCollaborationInviteEmail(
           </tr>
           <tr>
             <td style="padding:24px 32px;">
-              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">From:</strong> ${name}</p>
-              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Email:</strong> <a href="mailto:${email}" style="color:#d4a843;">${email}</a></p>
-              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Company:</strong> ${company || "—"}</p>
-              <p style="margin:0 0 16px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Subject:</strong> ${subject}</p>
+              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">From:</strong> ${esc(name)}</p>
+              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Email:</strong> <a href="mailto:${esc(email)}" style="color:#d4a843;">${esc(email)}</a></p>
+              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Company:</strong> ${esc(company) || "—"}</p>
+              <p style="margin:0 0 16px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Subject:</strong> ${esc(subject)}</p>
               <div style="background-color:#1a1a1a;border:1px solid #262626;border-radius:8px;padding:16px;margin-bottom:24px;">
-                <p style="margin:0;font-size:14px;line-height:1.7;color:#d4d4d4;white-space:pre-wrap;">${message}</p>
+                <p style="margin:0;font-size:14px;line-height:1.7;color:#d4d4d4;white-space:pre-wrap;">${esc(message)}</p>
               </div>
-              <a href="mailto:${email}?subject=Re: ${subject}" style="display:inline-block;padding:10px 24px;background-color:#d4a843;color:#0a0a0a;font-size:13px;font-weight:600;text-decoration:none;border-radius:6px;">
-                Reply to ${name}
+              <a href="mailto:${esc(email)}?subject=Re: ${esc(subject)}" style="display:inline-block;padding:10px 24px;background-color:#d4a843;color:#0a0a0a;font-size:13px;font-weight:600;text-decoration:none;border-radius:6px;">
+                Reply to ${esc(name)}
               </a>
             </td>
           </tr>
@@ -526,7 +538,7 @@ export async function sendCollaborationInviteEmail(
         from: FROM,
         to: "Studiosvirelle@gmail.com",
         replyTo: email,
-        subject: `[Virelle Inquiry] ${subject} — ${name}`,
+        subject: `[Virelle Inquiry] ${subject.replace(/[<>]/g, "")} — ${name.replace(/[<>]/g, "")}`,
         html,
       });
       return true;
@@ -557,7 +569,7 @@ export async function sendCollaborationInviteEmail(
           </tr>
           <tr>
             <td style="padding:24px 32px;">
-              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Email:</strong> <a href="mailto:${email}" style="color:#d4a843;">${email}</a></p>
+              <p style="margin:0 0 8px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Email:</strong> <a href="mailto:${esc(email)}" style="color:#d4a843;">${esc(email)}</a></p>
               <p style="margin:0 0 24px;font-size:14px;color:#a3a3a3;"><strong style="color:#f5f5f5;">Time:</strong> ${new Date().toUTCString()}</p>
               <p style="margin:0;font-size:13px;color:#737373;">This person wants to be notified when the Virelle Showcase goes live.</p>
             </td>
@@ -577,7 +589,7 @@ export async function sendCollaborationInviteEmail(
       await getTransporter().sendMail({
         from: FROM,
         to: "Studiosvirelle@gmail.com",
-        subject: `[Showcase Waitlist] ${email}`,
+        subject: `[Showcase Waitlist] ${email.replace(/[<>]/g, "")}`,
         html,
       });
       return true;
